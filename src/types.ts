@@ -31,6 +31,8 @@ export interface AppPrefs {
   reciterId: string
   theme: ThemeId
   font: FontId
+  /** Multiplier for Arabic / translation size (0.8–1.8). */
+  fontScale: number
 }
 
 export type DownloadStatus = 'idle' | 'downloading' | 'ready' | 'error'

@@ -12,11 +12,17 @@ import {
 import { loadPrefs, savePrefs } from './lib/prefs'
 import type { AppPrefs, DownloadStatus, FontId, RepeatMode, ThemeId } from './types'
 
+const PORTRAIT_MOBILE_MQ = '(max-width: 900px) and (orientation: portrait)'
+
 export default function App() {
   const [prefs, setPrefs] = useState<AppPrefs>(() => loadPrefs())
   const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>('idle')
   const [downloadProgress, setDownloadProgress] = useState('')
   const [toast, setToast] = useState<string | null>(null)
+  const [panelCollapsed, setPanelCollapsed] = useState(true)
+  const [isPortraitMobile, setIsPortraitMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(PORTRAIT_MOBILE_MQ).matches : false,
+  )
   const abortRef = useRef<AbortController | null>(null)
 
   const surah = useMemo(() => getSurah(prefs.surahId), [prefs.surahId])
@@ -33,9 +39,18 @@ export default function App() {
   }, [toast])
 
   useEffect(() => {
+    const mq = window.matchMedia(PORTRAIT_MOBILE_MQ)
+    const sync = () => setIsPortraitMobile(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+
+  useEffect(() => {
     savePrefs(prefs)
     document.documentElement.dataset.theme = prefs.theme
     document.documentElement.dataset.font = prefs.font
+    document.documentElement.style.setProperty('--font-scale', String(prefs.fontScale))
   }, [prefs])
 
   useEffect(() => {
@@ -97,8 +112,10 @@ export default function App() {
     setToast('Offline copy removed')
   }
 
+  const panelIsCollapsed = isPortraitMobile && panelCollapsed
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell${panelIsCollapsed ? ' panel-collapsed' : ''}`}>
       <SetupPanel
         surahId={prefs.surahId}
         mode={prefs.mode}
@@ -106,8 +123,11 @@ export default function App() {
         reciterId={prefs.reciterId}
         theme={prefs.theme}
         font={prefs.font}
+        fontScale={prefs.fontScale}
         downloadStatus={downloadStatus}
         downloadProgress={downloadProgress}
+        collapsed={panelIsCollapsed}
+        onToggleCollapsed={() => setPanelCollapsed((v) => !v)}
         onSurahChange={(id) => {
           player.stop()
           update('surahId', id)
@@ -126,6 +146,7 @@ export default function App() {
         }}
         onThemeChange={(theme: ThemeId) => update('theme', theme)}
         onFontChange={(font: FontId) => update('font', font)}
+        onFontScaleChange={(scale) => update('fontScale', scale)}
         onDownload={() => void handleDownload()}
         onRemoveDownload={() => void handleRemove()}
         onPlay={() => player.play()}

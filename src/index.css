@@ -60,8 +60,15 @@
 }
 
 [data-theme='mushaf'] .setup-panel .field-label,
-[data-theme='mushaf'] .setup-panel .brand-sub {
+[data-theme='mushaf'] .setup-panel .brand-sub,
+[data-theme='mushaf'] .setup-panel .setup-summary {
   color: rgba(243, 235, 224, 0.7);
+}
+
+[data-theme='mushaf'] .setup-panel .collapse-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f3ebe0;
+  border-color: rgba(210, 181, 107, 0.35);
 }
 
 [data-theme='mushaf'] .setup-panel .segmented button,
@@ -95,6 +102,10 @@
   --arabic-font: 'Scheherazade New', 'Amiri', serif;
 }
 
+:root {
+  --font-scale: 1;
+}
+
 *,
 *::before,
 *::after {
@@ -104,8 +115,11 @@
 html,
 body,
 #root {
+  width: 100%;
+  max-width: 100%;
   height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 body {
@@ -122,10 +136,19 @@ select {
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(240px, 28%) 1fr;
-  height: 100%;
-  min-height: 100dvh;
+  grid-template-columns: minmax(0, 17.5rem) minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
   background: var(--bg-reader);
+  padding:
+    env(safe-area-inset-top, 0)
+    env(safe-area-inset-right, 0)
+    env(safe-area-inset-bottom, 0)
+    env(safe-area-inset-left, 0);
+  box-sizing: border-box;
 }
 
 .setup-panel {
@@ -136,6 +159,66 @@ select {
   background: var(--bg-panel);
   border-right: 1px solid var(--border);
   overflow: auto;
+  min-width: 0;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.setup-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.setup-toolbar-brand {
+  min-width: 0;
+}
+
+.collapse-toggle {
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: var(--control);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  min-height: 44px;
+}
+
+.collapse-toggle-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.setup-summary {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-compact {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.95rem;
+}
+
+.setup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-height: 0;
 }
 
 .brand {
@@ -147,7 +230,7 @@ select {
 }
 
 .brand-sub {
-  margin: -0.4rem 0 0.2rem;
+  margin: 0.15rem 0 0;
   font-size: 0.85rem;
   color: var(--text-muted);
 }
@@ -245,8 +328,13 @@ select {
   border: 1px solid var(--border);
   background: var(--control);
   color: var(--text);
-  font-size: 1.25rem;
+  font-size: 1.05rem;
   cursor: pointer;
+}
+
+.stepper button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .stepper-value {
@@ -254,6 +342,11 @@ select {
   text-align: center;
   font-size: 1.6rem;
   font-weight: 600;
+}
+
+.stepper-value-sm {
+  min-width: 4.5ch;
+  font-size: 1.15rem;
 }
 
 .setup-actions {
@@ -293,12 +386,16 @@ select {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  width: 100%;
 }
 
 .ayah-reader {
-  flex: 1;
+  flex: 1 1 auto;
   overflow: auto;
   padding: 1.25rem 1.75rem 1rem;
+  min-height: 0;
+  overscroll-behavior: contain;
 }
 
 .reader-header {
@@ -368,7 +465,7 @@ select {
   direction: rtl;
   text-align: right;
   font-family: var(--arabic-font);
-  font-size: clamp(1.75rem, 3.6vw, 2.45rem);
+  font-size: calc(clamp(1.75rem, 3.6vw, 2.45rem) * var(--font-scale, 1));
   line-height: 1.85;
   font-weight: 500;
 }
@@ -377,7 +474,7 @@ select {
   margin: 0.55rem 0 0;
   direction: ltr;
   text-align: right;
-  font-size: clamp(0.95rem, 1.6vw, 1.1rem);
+  font-size: calc(clamp(0.95rem, 1.6vw, 1.1rem) * var(--font-scale, 1));
   line-height: 1.55;
   color: var(--text-muted);
 }
@@ -390,16 +487,24 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
   padding: 0.75rem 1.5rem;
   border-top: 1px solid var(--border);
   background: var(--bg-panel);
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .dock-stat {
   font-size: 0.9rem;
   color: var(--text-muted);
-  min-width: 7rem;
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dock-stat:last-child {
@@ -409,7 +514,9 @@ select {
 .dock-controls {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.75rem;
+  flex: 0 0 auto;
 }
 
 .ctrl {
@@ -452,20 +559,199 @@ select {
   color: #f3ebe0;
 }
 
-@media (max-width: 820px) and (orientation: portrait) {
+/* Phones / narrow tablets: stack so panes never overlap */
+@media (max-width: 900px) {
   .app-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .setup-panel {
     border-right: none;
     border-bottom: 1px solid var(--border);
-    max-height: 42vh;
+    max-height: min(40dvh, 22rem);
+  }
+
+  .setup-panel select,
+  .segmented button,
+  .btn {
+    min-height: 48px;
+    font-size: 1rem;
+  }
+
+  .stepper button {
+    width: 48px;
+    height: 48px;
+  }
+
+  .ctrl {
+    width: 52px;
+    height: 52px;
+  }
+
+  .ctrl-main {
+    width: 66px;
+    height: 66px;
+  }
+
+  .ayah-reader {
+    padding: 1rem 1.1rem 0.75rem;
   }
 
   .ayah-arabic {
-    font-size: 1.65rem;
+    font-size: calc(1.75rem * var(--font-scale, 1));
+  }
+
+  .player-dock {
+    padding: 0.65rem 0.85rem;
+  }
+
+  .dock-stat {
+    font-size: 0.8rem;
+  }
+}
+
+/* Collapsible settings — mobile portrait only */
+@media (max-width: 900px) and (orientation: portrait) {
+  .collapse-toggle {
+    display: inline-flex;
+  }
+
+  .setup-panel.is-collapsed {
+    max-height: none;
+    padding: 0.55rem 0.75rem;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .setup-panel.is-collapsed .setup-body {
+    display: none;
+  }
+
+  .app-shell.panel-collapsed {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+}
+
+/* Desktop / landscape: always show full settings, no collapse chrome */
+@media (min-width: 901px), (orientation: landscape) {
+  .collapse-toggle,
+  .setup-summary,
+  .btn-compact {
+    display: none !important;
+  }
+
+  .setup-panel.is-collapsed .setup-body {
+    display: flex;
+  }
+}
+
+/* Phone landscape: side-by-side with shrinkable columns (no overflow gap) */
+@media (max-width: 950px) and (orientation: landscape) {
+  .app-shell {
+    grid-template-columns: minmax(0, 38%) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .setup-panel {
+    max-height: none;
+    height: 100%;
+    gap: 0.5rem;
+    padding: 0.65rem 0.7rem;
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+  }
+
+  .brand {
+    font-size: 0.85rem;
+  }
+
+  .brand-sub {
+    display: none;
+  }
+
+  .field-label {
+    font-size: 0.7rem;
+  }
+
+  .setup-panel select {
+    min-height: 44px;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.95rem;
+    border-radius: 12px;
+  }
+
+  .theme-swatch {
+    height: 40px;
+  }
+
+  .segmented button {
+    min-height: 44px;
+    padding: 0.55rem 0.35rem;
+    font-size: 0.9rem;
+    border-radius: 12px;
+  }
+
+  .stepper button {
+    width: 44px;
+    height: 44px;
+    font-size: 1rem;
+  }
+
+  .stepper-value {
+    font-size: 1.3rem;
+  }
+
+  .btn {
+    min-height: 46px;
+    padding: 0.7rem 0.85rem;
+    font-size: 1rem;
+    border-radius: 12px;
+  }
+
+  .ayah-reader {
+    padding: 0.75rem 1rem 0.5rem;
+  }
+
+  .reader-header h1 {
+    font-size: 1.1rem;
+  }
+
+  .ayah-block {
+    padding: 0.65rem 0.85rem;
+  }
+
+  .ayah-arabic {
+    font-size: calc(1.7rem * var(--font-scale, 1));
+  }
+
+  .ayah-translation {
+    font-size: calc(0.95rem * var(--font-scale, 1));
+  }
+
+  .player-dock {
+    padding: 0.45rem 0.75rem;
+    gap: 0.4rem;
+  }
+
+  .dock-stat {
+    font-size: 0.75rem;
+  }
+
+  .dock-controls {
+    gap: 0.45rem;
+  }
+
+  .ctrl {
+    width: 48px;
+    height: 48px;
+    font-size: 1rem;
+  }
+
+  .ctrl-main {
+    width: 60px;
+    height: 60px;
+    font-size: 1.2rem;
   }
 }
 

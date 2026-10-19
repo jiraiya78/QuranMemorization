@@ -3,6 +3,10 @@ import { RECITERS } from '../data/reciters'
 
 const KEY = 'recitehelper.prefs.v1'
 
+export const FONT_SCALE_MIN = 0.8
+export const FONT_SCALE_MAX = 1.8
+export const FONT_SCALE_STEP = 0.1
+
 const DEFAULTS: AppPrefs = {
   surahId: 114,
   mode: 'ayah',
@@ -10,6 +14,14 @@ const DEFAULTS: AppPrefs = {
   reciterId: RECITERS[0].id,
   theme: 'emerald',
   font: 'ibm',
+  fontScale: 1,
+}
+
+function clampFontScale(value: unknown): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return DEFAULTS.fontScale
+  const stepped = Math.round(n / FONT_SCALE_STEP) * FONT_SCALE_STEP
+  return Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, Number(stepped.toFixed(1))))
 }
 
 export function loadPrefs(): AppPrefs {
@@ -21,6 +33,7 @@ export function loadPrefs(): AppPrefs {
       ...DEFAULTS,
       ...parsed,
       repeats: Math.min(99, Math.max(1, Number(parsed.repeats) || DEFAULTS.repeats)),
+      fontScale: clampFontScale(parsed.fontScale ?? DEFAULTS.fontScale),
     }
   } catch {
     return { ...DEFAULTS }
