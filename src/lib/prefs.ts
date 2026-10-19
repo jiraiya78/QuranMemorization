@@ -1,4 +1,4 @@
-import type { AppPrefs } from '../types'
+import type { AppPrefs, DisplayMode } from '../types'
 import { RECITERS } from '../data/reciters'
 
 const KEY = 'recitehelper.prefs.v1'
@@ -13,8 +13,13 @@ const DEFAULTS: AppPrefs = {
   repeats: 3,
   reciterId: RECITERS[0].id,
   theme: 'emerald',
-  font: 'ibm',
+  font: 'scheherazade',
   fontScale: 1,
+  displayMode: 'mushaf',
+}
+
+function normalizeDisplayMode(value: unknown): DisplayMode {
+  return value === 'list' ? 'list' : 'mushaf'
 }
 
 function clampFontScale(value: unknown): number {
@@ -34,6 +39,7 @@ export function loadPrefs(): AppPrefs {
       ...parsed,
       repeats: Math.min(99, Math.max(1, Number(parsed.repeats) || DEFAULTS.repeats)),
       fontScale: clampFontScale(parsed.fontScale ?? DEFAULTS.fontScale),
+      displayMode: normalizeDisplayMode(parsed.displayMode ?? DEFAULTS.displayMode),
     }
   } catch {
     return { ...DEFAULTS }

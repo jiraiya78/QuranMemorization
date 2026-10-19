@@ -4,6 +4,9 @@ export type ThemeId = 'emerald' | 'indigo' | 'mushaf'
 
 export type FontId = 'ibm' | 'amiri' | 'noto' | 'scheherazade'
 
+/** mushaf = continuous Rasm Uthmani page; list = one ayah per block */
+export type DisplayMode = 'mushaf' | 'list'
+
 export interface SurahMeta {
   id: number
   nameArabic: string
@@ -33,6 +36,7 @@ export interface AppPrefs {
   font: FontId
   /** Multiplier for Arabic / translation size (0.8–1.8). */
   fontScale: number
+  displayMode: DisplayMode
 }
 
 export type DownloadStatus = 'idle' | 'downloading' | 'ready' | 'error'

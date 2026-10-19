@@ -483,6 +483,89 @@ select {
   color: var(--text);
 }
 
+/* Rasm Uthmani mushaf page layout */
+.mushaf-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding: 1.1rem 1.25rem 1.4rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow);
+  margin-bottom: 1rem;
+}
+
+[data-theme='mushaf'] .mushaf-page {
+  background: rgba(255, 252, 245, 0.72);
+  border-color: rgba(47, 74, 60, 0.28);
+}
+
+.mushaf-bismillah {
+  margin: 0;
+  text-align: center;
+  direction: rtl;
+  font-family: var(--arabic-font);
+  font-size: calc(clamp(1.55rem, 3vw, 2.1rem) * var(--font-scale, 1));
+  line-height: 1.8;
+  color: var(--text-muted);
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  transition: color 0.25s ease, background 0.25s ease;
+}
+
+.mushaf-bismillah.active {
+  color: var(--text);
+  background: var(--ayah-active-bg);
+  border-radius: 10px;
+  padding: 0.45rem 0.6rem 0.75rem;
+  border-bottom-color: transparent;
+}
+
+.mushaf-text {
+  direction: rtl;
+  text-align: justify;
+  text-align-last: center;
+  font-family: var(--arabic-font);
+  font-size: calc(clamp(1.85rem, 3.8vw, 2.55rem) * var(--font-scale, 1));
+  line-height: 2.15;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.mushaf-ayah {
+  border-radius: 6px;
+  padding: 0.05em 0.08em;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.mushaf-ayah.active {
+  background: var(--ayah-active-bg);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.mushaf-ayah-mark {
+  display: inline-block;
+  margin-inline: 0.18em 0.28em;
+  color: var(--accent);
+  font-size: 0.72em;
+  white-space: nowrap;
+  vertical-align: middle;
+  font-family: var(--arabic-font);
+}
+
+.mushaf-translation {
+  margin: 0;
+  direction: ltr;
+  text-align: right;
+  font-size: calc(clamp(0.95rem, 1.6vw, 1.1rem) * var(--font-scale, 1));
+  line-height: 1.55;
+  color: var(--text);
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+  min-height: 2.5em;
+}
+
 .player-dock {
   display: flex;
   align-items: center;

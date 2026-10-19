@@ -10,7 +10,14 @@ import {
   removeSurah,
 } from './lib/offlineCache'
 import { loadPrefs, savePrefs } from './lib/prefs'
-import type { AppPrefs, DownloadStatus, FontId, RepeatMode, ThemeId } from './types'
+import type {
+  AppPrefs,
+  DisplayMode,
+  DownloadStatus,
+  FontId,
+  RepeatMode,
+  ThemeId,
+} from './types'
 
 const PORTRAIT_MOBILE_MQ = '(max-width: 900px) and (orientation: portrait)'
 
@@ -124,6 +131,7 @@ export default function App() {
         theme={prefs.theme}
         font={prefs.font}
         fontScale={prefs.fontScale}
+        displayMode={prefs.displayMode}
         downloadStatus={downloadStatus}
         downloadProgress={downloadProgress}
         collapsed={panelIsCollapsed}
@@ -147,6 +155,7 @@ export default function App() {
         onThemeChange={(theme: ThemeId) => update('theme', theme)}
         onFontChange={(font: FontId) => update('font', font)}
         onFontScaleChange={(scale) => update('fontScale', scale)}
+        onDisplayModeChange={(mode: DisplayMode) => update('displayMode', mode)}
         onDownload={() => void handleDownload()}
         onRemoveDownload={() => void handleRemove()}
         onPlay={() => player.play()}
@@ -158,6 +167,7 @@ export default function App() {
           ayahs={ayahs}
           activeAyah={player.currentAyah}
           surahName={`${surah.nameSimple} · ${surah.nameArabic}`}
+          displayMode={prefs.displayMode}
         />
         <PlayerDock
           isPlaying={player.isPlaying}

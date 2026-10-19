@@ -1,7 +1,7 @@
 import { RECITERS } from '../data/reciters'
 import { SURAH_LIST } from '../data/quran'
 import { FONT_SCALE_MAX, FONT_SCALE_MIN, FONT_SCALE_STEP } from '../lib/prefs'
-import type { DownloadStatus, FontId, RepeatMode, ThemeId } from '../types'
+import type { DisplayMode, DownloadStatus, FontId, RepeatMode, ThemeId } from '../types'
 
 const THEMES: { id: ThemeId; label: string }[] = [
   { id: 'emerald', label: 'Emerald' },
@@ -24,6 +24,7 @@ interface Props {
   theme: ThemeId
   font: FontId
   fontScale: number
+  displayMode: DisplayMode
   downloadStatus: DownloadStatus
   downloadProgress: string
   collapsed: boolean
@@ -35,6 +36,7 @@ interface Props {
   onThemeChange: (theme: ThemeId) => void
   onFontChange: (font: FontId) => void
   onFontScaleChange: (scale: number) => void
+  onDisplayModeChange: (mode: DisplayMode) => void
   onDownload: () => void
   onRemoveDownload: () => void
   onPlay: () => void
@@ -49,6 +51,7 @@ export function SetupPanel({
   theme,
   font,
   fontScale,
+  displayMode,
   downloadStatus,
   downloadProgress,
   collapsed,
@@ -60,6 +63,7 @@ export function SetupPanel({
   onThemeChange,
   onFontChange,
   onFontScaleChange,
+  onDisplayModeChange,
   onDownload,
   onRemoveDownload,
   onPlay,
@@ -117,6 +121,26 @@ export function SetupPanel({
             ))}
           </div>
         </label>
+
+        <div className="field">
+          <span className="field-label">Ayah layout</span>
+          <div className="segmented">
+            <button
+              type="button"
+              className={displayMode === 'mushaf' ? 'active' : ''}
+              onClick={() => onDisplayModeChange('mushaf')}
+            >
+              Mushaf page
+            </button>
+            <button
+              type="button"
+              className={displayMode === 'list' ? 'active' : ''}
+              onClick={() => onDisplayModeChange('list')}
+            >
+              Ayah list
+            </button>
+          </div>
+        </div>
 
         <label className="field">
           <span className="field-label">Arabic font</span>
