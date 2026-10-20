@@ -10,6 +10,8 @@ interface UsePlayerOptions {
   versesCount: number
   mode: RepeatMode
   repeats: number
+  rangeFrom: number
+  rangeTo: number
   reciterId: string
   onToast?: (message: string) => void
 }
@@ -32,13 +34,17 @@ export function usePlayer({
   versesCount,
   mode,
   repeats,
+  rangeFrom,
+  rangeTo,
   reciterId,
   onToast,
 }: UsePlayerOptions) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const objectUrlsRef = useRef<string[]>([])
   const indexRef = useRef(0)
-  const playlistRef = useRef(buildPlaylist(surahId, versesCount, mode, repeats))
+  const playlistRef = useRef(
+    buildPlaylist({ surahId, versesCount, mode, repeats, rangeFrom, rangeTo }),
+  )
   const playingRef = useRef(false)
   const gapTimerRef = useRef<number | null>(null)
 
@@ -116,11 +122,18 @@ export function usePlayer({
   )
 
   useEffect(() => {
-    playlistRef.current = buildPlaylist(surahId, versesCount, mode, repeats)
+    playlistRef.current = buildPlaylist({
+      surahId,
+      versesCount,
+      mode,
+      repeats,
+      rangeFrom,
+      rangeTo,
+    })
     setPlaylistLength(playlistRef.current.length)
     indexRef.current = 0
     syncMeta(0)
-  }, [surahId, versesCount, mode, repeats, syncMeta])
+  }, [surahId, versesCount, mode, repeats, rangeFrom, rangeTo, syncMeta])
 
   useEffect(() => {
     const audio = audioRef.current ?? new Audio()
@@ -153,10 +166,17 @@ export function usePlayer({
   }, [goTo, onToast])
 
   const play = useCallback(() => {
-    playlistRef.current = buildPlaylist(surahId, versesCount, mode, repeats)
+    playlistRef.current = buildPlaylist({
+      surahId,
+      versesCount,
+      mode,
+      repeats,
+      rangeFrom,
+      rangeTo,
+    })
     setPlaylistLength(playlistRef.current.length)
     void goTo(0, true)
-  }, [goTo, mode, repeats, surahId, versesCount])
+  }, [goTo, mode, rangeFrom, rangeTo, repeats, surahId, versesCount])
 
   const pause = useCallback(() => {
     clearGap()

@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "node --experimental-strip-types scripts/test-playlist.mjs",
-    "fetch-data": "node scripts/fetch-juz-amma.mjs"
+    "fetch-data": "node scripts/fetch-quran.mjs",
+    "fetch-mushaf": "node scripts/fetch-mushaf-pages.mjs"
   },
   "dependencies": {
     "idb": "^8.0.4",

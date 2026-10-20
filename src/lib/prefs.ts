@@ -1,5 +1,6 @@
-import type { AppPrefs, DisplayMode } from '../types'
+import type { AppPrefs, DisplayMode, RepeatMode } from '../types'
 import { RECITERS } from '../data/reciters'
+import { getSurah } from '../data/quran'
 
 const KEY = 'recitehelper.prefs.v1'
 
@@ -8,19 +9,25 @@ export const FONT_SCALE_MAX = 1.8
 export const FONT_SCALE_STEP = 0.1
 
 const DEFAULTS: AppPrefs = {
-  surahId: 114,
+  surahId: 1,
   mode: 'ayah',
   repeats: 3,
+  rangeFrom: 1,
+  rangeTo: 7,
   reciterId: RECITERS[0].id,
   theme: 'emerald',
   font: 'scheherazade',
   fontScale: 1,
   displayMode: 'mushaf',
-  floatingTranslation: true,
 }
 
 function normalizeDisplayMode(value: unknown): DisplayMode {
   return value === 'list' ? 'list' : 'mushaf'
+}
+
+function normalizeMode(value: unknown): RepeatMode {
+  if (value === 'surah' || value === 'ayah' || value === 'range') return value
+  return DEFAULTS.mode
 }
 
 function clampFontScale(value: unknown): number {
@@ -30,21 +37,41 @@ function clampFontScale(value: unknown): number {
   return Math.min(FONT_SCALE_MAX, Math.max(FONT_SCALE_MIN, Number(stepped.toFixed(1))))
 }
 
+export function clampAyahRange(
+  from: number,
+  to: number,
+  versesCount: number,
+): { rangeFrom: number; rangeTo: number } {
+  const a = Math.min(Math.max(1, Math.round(from) || 1), versesCount)
+  const b = Math.min(Math.max(1, Math.round(to) || versesCount), versesCount)
+  return a <= b ? { rangeFrom: a, rangeTo: b } : { rangeFrom: b, rangeTo: a }
+}
+
 export function loadPrefs(): AppPrefs {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return { ...DEFAULTS }
-    const parsed = JSON.parse(raw) as Partial<AppPrefs>
+    const parsed = JSON.parse(raw) as Partial<AppPrefs> & {
+      floatingTranslation?: boolean
+    }
+    const { floatingTranslation: _legacyFloating, ...rest } = parsed
+    void _legacyFloating
+    const surahId = Number(rest.surahId) || DEFAULTS.surahId
+    const versesCount = getSurah(surahId).versesCount
+    const range = clampAyahRange(
+      Number(rest.rangeFrom) || 1,
+      Number(rest.rangeTo) || versesCount,
+      versesCount,
+    )
     return {
       ...DEFAULTS,
-      ...parsed,
-      repeats: Math.min(99, Math.max(1, Number(parsed.repeats) || DEFAULTS.repeats)),
-      fontScale: clampFontScale(parsed.fontScale ?? DEFAULTS.fontScale),
-      displayMode: normalizeDisplayMode(parsed.displayMode ?? DEFAULTS.displayMode),
-      floatingTranslation:
-        typeof parsed.floatingTranslation === 'boolean'
-          ? parsed.floatingTranslation
-          : DEFAULTS.floatingTranslation,
+      ...rest,
+      surahId,
+      mode: normalizeMode(rest.mode),
+      repeats: Math.min(99, Math.max(1, Number(rest.repeats) || DEFAULTS.repeats)),
+      ...range,
+      fontScale: clampFontScale(rest.fontScale ?? DEFAULTS.fontScale),
+      displayMode: normalizeDisplayMode(rest.displayMode ?? DEFAULTS.displayMode),
     }
   } catch {
     return { ...DEFAULTS }

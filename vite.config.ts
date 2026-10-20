@@ -12,9 +12,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'pwa-192.png', 'pwa-512.png'],
       manifest: {
-        name: 'ReciteHelper · Juz Amma',
+        name: 'ReciteHelper · Quran',
         short_name: 'ReciteHelper',
-        description: 'Memorize Juz Amma with repetition, highlight, and offline audio',
+        description: 'Memorize the Quran with repetition, highlight, and offline audio',
         theme_color: '#0c1f18',
         background_color: '#0c1f18',
         display: 'standalone',
@@ -42,6 +42,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,json,woff2}'],
+        // Full Quran text + mushaf page lines bundle
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
       },
     }),
   ],

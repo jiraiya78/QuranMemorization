@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mushaf landscape mockup · page 582 (Madani lines)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Scheherazade+New:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0c1f18;
+        --panel: #132a21;
+        --page: #f7f0e0;
+        --ink: #1a1a1a;
+        --accent: #2f6b4f;
+        --gold: #b0893f;
+        /* Same scale as ayah-list layout */
+        --ayah-fs: clamp(1.75rem, 3.2vw, 2.45rem);
+        --line-h: 2.05;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: radial-gradient(ellipse at top, #163528, var(--bg));
+        color: #e8f0ea;
+        font-family: system-ui, sans-serif;
+      }
+
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 1rem 1.25rem 2rem;
+      }
+
+      h1 {
+        margin: 0 0 0.35rem;
+        font-size: 1.15rem;
+      }
+
+      .note {
+        margin: 0 0 1rem;
+        color: #9db5a8;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        direction: ltr;
+        text-align: left;
+      }
+
+      .note code {
+        background: rgba(255, 255, 255, 0.08);
+        padding: 0.05em 0.35em;
+        border-radius: 4px;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+
+      .card-label {
+        direction: ltr;
+        text-align: left;
+        padding: 0.65rem 0.85rem;
+        font-size: 0.78rem;
+        letter-spacing: 0.03em;
+        color: #9db5a8;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .card-label strong {
+        color: #e8f0ea;
+      }
+
+      .sheet {
+        background: linear-gradient(165deg, #fffdf8, var(--page));
+        color: var(--ink);
+        padding: 0.75rem 0.9rem 1rem;
+      }
+
+      .banner {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        width: 100%;
+        padding: 0.4rem 0.5rem;
+        border: 2px solid color-mix(in srgb, var(--accent) 55%, var(--gold));
+        border-radius: 10px;
+        background: linear-gradient(180deg, #fff8e8, #efe0b8);
+      }
+
+      .wing {
+        flex: 1;
+        height: 0.45rem;
+        background: repeating-linear-gradient(
+          90deg,
+          var(--gold) 0 0.2rem,
+          transparent 0.2rem 0.38rem
+        );
+        opacity: 0.85;
+      }
+
+      .gem {
+        width: 0.85rem;
+        height: 0.85rem;
+        border-radius: 50%;
+        border: 2px solid var(--gold);
+        background: #c4a35a;
+        flex-shrink: 0;
+      }
+
+      .title {
+        font-family: 'Scheherazade New', serif;
+        font-weight: 700;
+        font-size: 1.25rem;
+        white-space: nowrap;
+        padding: 0 0.35rem;
+      }
+
+      .basmala {
+        font-family: 'Scheherazade New', serif;
+        font-weight: 700;
+        text-align: center;
+        font-size: calc(var(--ayah-fs) * 0.82);
+        margin: 0.15rem 0 0;
+        line-height: var(--line-h);
+        min-height: calc(var(--ayah-fs) * var(--line-h));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .lines {
+        font-family: 'Scheherazade New', serif;
+        font-weight: 700;
+        font-size: var(--ayah-fs);
+      }
+
+      .line {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0.28em;
+        direction: rtl;
+        white-space: nowrap;
+        line-height: var(--line-h);
+        min-height: calc(1em * var(--line-h));
+        height: calc(1em * var(--line-h));
+      }
+
+      .line.is-full {
+        justify-content: space-between;
+        gap: 0.12em;
+      }
+
+      .line.is-slot {
+        color: transparent;
+        user-select: none;
+      }
+
+      .line-tag {
+        direction: ltr;
+        flex-shrink: 0;
+        font-family: system-ui, sans-serif;
+        font-size: 0.55rem;
+        font-weight: 600;
+        color: #8a7a55;
+        margin-inline-end: 0.35rem;
+        min-width: 1.4rem;
+      }
+
+      .word {
+        white-space: nowrap;
+      }
+
+      .mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.25em;
+        height: 1.25em;
+        border: 1.5px solid var(--accent);
+        border-radius: 50%;
+        color: var(--accent);
+        font-size: 0.45em;
+        flex-shrink: 0;
+      }
+
+      .ref {
+        direction: ltr;
+        text-align: left;
+        margin-top: 1rem;
+        padding: 1rem 1.1rem;
+        background: rgba(0, 0, 0, 0.22);
+        border-radius: 12px;
+        font-size: 0.88rem;
+        line-height: 1.55;
+        color: #c5d6cc;
+      }
+
+      .ref h2 {
+        margin: 0 0 0.45rem;
+        font-size: 0.95rem;
+        color: #fff;
+      }
+
+      .ref pre {
+        margin: 0.5rem 0 0;
+        padding: 0.75rem 0.85rem;
+        background: rgba(0, 0, 0, 0.28);
+        border-radius: 8px;
+        overflow-x: auto;
+        direction: rtl;
+        text-align: right;
+        font-family: 'Scheherazade New', serif;
+        font-size: 1.05rem;
+        line-height: 1.7;
+        color: #f0e6d0;
+      }
+
+      .ref ul {
+        margin: 0.4rem 0 0;
+        padding-inline-start: 1.2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Mockup · Madani page 582 (An-Naba)</h1>
+      <p class="note">
+        Reference: <code>src/data/mushaf-pages.json</code> page <strong>582</strong>.
+        Line slots 1–2 are surah banner + basmala. <strong>First ayah text starts on line 3</strong>,
+        and line 3 already contains ayahs <strong>1 + 2 + 3</strong> (not one sparse ayah per row).
+        Typography proposal only: ayah-list font size + line-height 2.05; line breaks stay Madani.
+      </p>
+
+      <section class="card">
+        <div class="card-label">
+          <strong>Proposed look</strong> — exact Madani line breaks · larger font · taller line-height
+        </div>
+        <div class="sheet">
+          <!-- Madani L1: surah header -->
+          <div class="line is-slot" aria-hidden>
+            <span class="line-tag">L1</span>
+          </div>
+          <div class="banner" style="margin-top: -2.05em; margin-bottom: 0.15em; position: relative; z-index: 1">
+            <span class="wing"></span><span class="gem"></span>
+            <span class="title">سُورَةُ النَّبَإِ</span>
+            <span class="gem"></span><span class="wing"></span>
+          </div>
+
+          <!-- Madani L2: basmala -->
+          <p class="basmala"><span class="line-tag" style="position:absolute;opacity:0">L2</span>بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ</p>
+
+          <div class="lines">
+            <!-- L3: 78:1 + 78:2 + 78:3 -->
+            <div class="line is-full">
+              <span class="line-tag">L3</span>
+              <span class="word">عَمَّ</span>
+              <span class="word">يَتَسَآءَلُونَ</span>
+              <span class="mark">١</span>
+              <span class="word">عَنِ</span>
+              <span class="word">ٱلنَّبَإِ</span>
+              <span class="word">ٱلْعَظِيمِ</span>
+              <span class="mark">٢</span>
+              <span class="word">ٱلَّذِى</span>
+              <span class="word">هُمْ</span>
+              <span class="word">فِيهِ</span>
+              <span class="word">مُخْتَلِفُونَ</span>
+              <span class="mark">٣</span>
+            </div>
+
+            <!-- L4: 78:4 + 78:5 + 78:6 -->
+            <div class="line is-full">
+              <span class="line-tag">L4</span>
+              <span class="word">كَلَّا</span>
+              <span class="word">سَيَعْلَمُونَ</span>
+              <span class="mark">٤</span>
+              <span class="word">ثُمَّ</span>
+              <span class="word">كَلَّا</span>
+              <span class="word">سَيَعْلَمُونَ</span>
+              <span class="mark">٥</span>
+              <span class="word">أَلَمْ</span>
+              <span class="word">نَجْعَلِ</span>
+              <span class="word">ٱلْأَرْضَ</span>
+              <span class="word">مِهَـٰدًۭا</span>
+              <span class="mark">٦</span>
+            </div>
+
+            <!-- L5: 78:7 + 78:8 + start 78:9 -->
+            <div class="line is-full">
+              <span class="line-tag">L5</span>
+              <span class="word">وَٱلْجِبَالَ</span>
+              <span class="word">أَوْتَادًۭا</span>
+              <span class="mark">٧</span>
+              <span class="word">وَخَلَقْنَـٰكُمْ</span>
+              <span class="word">أَزْوَٰجًۭا</span>
+              <span class="mark">٨</span>
+              <span class="word">وَجَعَلْنَا</span>
+              <span class="word">نَوْمَكُمْ</span>
+              <span class="word">سُبَاتًۭا</span>
+            </div>
+
+            <!-- L6 -->
+            <div class="line is-full">
+              <span class="line-tag">L6</span>
+              <span class="mark">٩</span>
+              <span class="word">وَجَعَلْنَا</span>
+              <span class="word">ٱلَّيْلَ</span>
+              <span class="word">لِبَاسًۭا</span>
+              <span class="mark">١٠</span>
+              <span class="word">وَجَعَلْنَا</span>
+              <span class="word">ٱلنَّهَارَ</span>
+              <span class="word">مَعَاشًۭا</span>
+              <span class="mark">١١</span>
+              <span class="word">وَبَنَيْنَا</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="ref">
+        <h2>Source lines (mushaf-pages.json · page 582)</h2>
+        <ul>
+          <li>L1–L2 empty of verse text → banner + basmala</li>
+          <li><strong>L3</strong> = 78:1 + 78:2 + 78:3 (this is the first ayah line)</li>
+          <li>L4 = 78:4 + 78:5 + 78:6 · … through L15</li>
+        </ul>
+        <pre>
+L3: عَمَّ يَتَسَآءَلُونَ ﴿١﴾ عَنِ ٱلنَّبَإِ ٱلْعَظِيمِ ﴿٢﴾ ٱلَّذِى هُمْ فِيهِ مُخْتَلِفُونَ ﴿٣﴾
+L4: كَلَّا سَيَعْلَمُونَ ﴿٤﴾ ثُمَّ كَلَّا سَيَعْلَمُونَ ﴿٥﴾ أَلَمْ نَجْعَلِ ٱلْأَرْضَ مِهَـٰدًۭا ﴿٦﴾
+L5: وَٱلْجِبَالَ أَوْتَادًۭا ﴿٧﴾ وَخَلَقْنَـٰكُمْ أَزْوَٰجًۭا ﴿٨﴾ وَجَعَلْنَا نَوْمَكُمْ سُبَاتًۭا …
+        </pre>
+      </div>
+    </div>
+  </body>
+</html>

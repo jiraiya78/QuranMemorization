@@ -1,24 +1,25 @@
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { BISMILLAH, isBismillah } from '../data/bismillah'
 import { TRANSLATION_LABEL } from '../data/quran'
-import { toArabicIndic } from '../lib/arabicNumerals'
+import { getPageForAyah } from '../data/mushaf'
 import type { Ayah, DisplayMode } from '../types'
+import { MushafPage } from './MushafPage'
 
 interface Props {
   ayahs: Ayah[]
   activeAyah: number
+  surahId: number
   surahName: string
   displayMode: DisplayMode
-  floatingTranslation: boolean
   headerActions?: ReactNode
 }
 
 export function AyahReader({
   ayahs,
   activeAyah,
+  surahId,
   surahName,
   displayMode,
-  floatingTranslation,
   headerActions,
 }: Props) {
   const activeRef = useRef<HTMLElement | null>(null)
@@ -26,7 +27,18 @@ export function AyahReader({
     activeRef.current = node
   }
 
+  const playbackPage = useMemo(
+    () => getPageForAyah(surahId, activeAyah),
+    [surahId, activeAyah],
+  )
+  const [viewPage, setViewPage] = useState(playbackPage)
+
   useEffect(() => {
+    setViewPage(playbackPage)
+  }, [playbackPage])
+
+  useEffect(() => {
+    if (displayMode !== 'list') return
     activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [activeAyah, displayMode])
 
@@ -35,10 +47,12 @@ export function AyahReader({
     return ayahs.find((a) => a.number === activeAyah)?.translation ?? ''
   }, [activeAyah, ayahs])
 
-  const showFloating = displayMode === 'mushaf' && floatingTranslation
+  const showFloating = displayMode === 'mushaf'
 
   return (
-    <div className={`ayah-reader mode-${displayMode}${showFloating ? ' has-floating-translation' : ''}`}>
+    <div
+      className={`ayah-reader mode-${displayMode}${showFloating ? ' has-floating-translation' : ''}`}
+    >
       <header className="reader-header">
         <div className="reader-header-row">
           <div>
@@ -49,70 +63,46 @@ export function AyahReader({
         </div>
       </header>
 
-      {displayMode === 'mushaf' ? (
-        <div className="mushaf-page">
-          <p
-            ref={isBismillah(activeAyah) ? setActiveNode : undefined}
-            className={`mushaf-bismillah${isBismillah(activeAyah) ? ' active' : ''}`}
-          >
-            {BISMILLAH.arabic}
-          </p>
+      <div className="ayah-scroll">
+        {displayMode === 'mushaf' ? (
+          <MushafPage
+            page={viewPage}
+            activeSurahId={surahId}
+            activeAyah={activeAyah}
+            onPageChange={setViewPage}
+          />
+        ) : (
+          <div className="ayah-list">
+            <article
+              ref={isBismillah(activeAyah) ? setActiveNode : undefined}
+              className={`ayah-block bismillah${isBismillah(activeAyah) ? ' active' : ''}`}
+            >
+              <div className="ayah-meta">
+                <span className="ayah-number">﷽</span>
+              </div>
+              <p className="ayah-arabic">{BISMILLAH.arabic}</p>
+              <p className="ayah-translation">{BISMILLAH.translation}</p>
+            </article>
 
-          <div className="mushaf-text" dir="rtl" lang="ar">
             {ayahs.map((ayah) => {
               const active = ayah.number === activeAyah
               return (
-                <span
+                <article
                   key={ayah.number}
                   ref={active ? setActiveNode : undefined}
-                  className={`mushaf-ayah${active ? ' active' : ''}`}
+                  className={`ayah-block${active ? ' active' : ''}`}
                 >
-                  {ayah.arabic}
-                  <span className="mushaf-ayah-mark" aria-label={`Ayah ${ayah.number}`}>
-                    ۝{toArabicIndic(ayah.number)}
-                  </span>
-                </span>
+                  <div className="ayah-meta">
+                    <span className="ayah-number">{ayah.number}</span>
+                  </div>
+                  <p className="ayah-arabic">{ayah.arabic}</p>
+                  <p className="ayah-translation">{ayah.translation}</p>
+                </article>
               )
             })}
           </div>
-
-          {!showFloating ? (
-            <p className="mushaf-translation" dir="ltr">
-              {activeTranslation}
-            </p>
-          ) : null}
-        </div>
-      ) : (
-        <div className="ayah-list">
-          <article
-            ref={isBismillah(activeAyah) ? setActiveNode : undefined}
-            className={`ayah-block bismillah${isBismillah(activeAyah) ? ' active' : ''}`}
-          >
-            <div className="ayah-meta">
-              <span className="ayah-number">﷽</span>
-            </div>
-            <p className="ayah-arabic">{BISMILLAH.arabic}</p>
-            <p className="ayah-translation">{BISMILLAH.translation}</p>
-          </article>
-
-          {ayahs.map((ayah) => {
-            const active = ayah.number === activeAyah
-            return (
-              <article
-                key={ayah.number}
-                ref={active ? setActiveNode : undefined}
-                className={`ayah-block${active ? ' active' : ''}`}
-              >
-                <div className="ayah-meta">
-                  <span className="ayah-number">{ayah.number}</span>
-                </div>
-                <p className="ayah-arabic">{ayah.arabic}</p>
-                <p className="ayah-translation">{ayah.translation}</p>
-              </article>
-            )
-          })}
-        </div>
-      )}
+        )}
+      </div>
 
       {showFloating && activeTranslation ? (
         <aside className="floating-translation" dir="ltr" aria-live="polite">

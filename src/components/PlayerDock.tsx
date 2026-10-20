@@ -1,4 +1,12 @@
 import { isBismillah } from '../data/bismillah'
+import {
+  IconNext,
+  IconNextSurah,
+  IconPause,
+  IconPlay,
+  IconPrev,
+  IconPrevSurah,
+} from './TransportIcons'
 
 interface Props {
   isPlaying: boolean
@@ -46,10 +54,10 @@ export function PlayerDock({
           disabled={!canPrevSurah}
           onClick={onPrevSurah}
         >
-          ⏪
+          <IconPrevSurah />
         </button>
         <button type="button" className="ctrl" aria-label="Previous ayah" onClick={onPrev}>
-          ⏮
+          <IconPrev />
         </button>
         <button
           type="button"
@@ -57,10 +65,10 @@ export function PlayerDock({
           aria-label={isPlaying ? 'Pause' : 'Play'}
           onClick={onToggle}
         >
-          {isPlaying ? '⏸' : '▶'}
+          {isPlaying ? <IconPause /> : <IconPlay />}
         </button>
         <button type="button" className="ctrl" aria-label="Next ayah" onClick={onNext}>
-          ⏭
+          <IconNext />
         </button>
         <button
           type="button"
@@ -69,7 +77,7 @@ export function PlayerDock({
           disabled={!canNextSurah}
           onClick={onNextSurah}
         >
-          ⏩
+          <IconNextSurah />
         </button>
       </div>
       <span className="dock-stat">{ayahLabel}</span>

@@ -1,5 +1,6 @@
+import { useMemo, useState } from 'react'
 import { RECITERS } from '../data/reciters'
-import { SURAH_LIST } from '../data/quran'
+import { filterSurahsByJuz, JUZ_COUNT, SURAH_LIST } from '../data/quran'
 import { FONT_SCALE_MAX, FONT_SCALE_MIN, FONT_SCALE_STEP } from '../lib/prefs'
 import type { DisplayMode, DownloadStatus, FontId, RepeatMode, ThemeId } from '../types'
 
@@ -20,12 +21,14 @@ interface Props {
   surahId: number
   mode: RepeatMode
   repeats: number
+  rangeFrom: number
+  rangeTo: number
+  versesCount: number
   reciterId: string
   theme: ThemeId
   font: FontId
   fontScale: number
   displayMode: DisplayMode
-  floatingTranslation: boolean
   downloadStatus: DownloadStatus
   downloadProgress: string
   collapsed: boolean
@@ -33,12 +36,13 @@ interface Props {
   onSurahChange: (id: number) => void
   onModeChange: (mode: RepeatMode) => void
   onRepeatsChange: (n: number) => void
+  onRangeFromChange: (n: number) => void
+  onRangeToChange: (n: number) => void
   onReciterChange: (id: string) => void
   onThemeChange: (theme: ThemeId) => void
   onFontChange: (font: FontId) => void
   onFontScaleChange: (scale: number) => void
   onDisplayModeChange: (mode: DisplayMode) => void
-  onFloatingTranslationChange: (value: boolean) => void
   onDownload: () => void
   onRemoveDownload: () => void
   onPlay: () => void
@@ -49,12 +53,14 @@ export function SetupPanel({
   surahId,
   mode,
   repeats,
+  rangeFrom,
+  rangeTo,
+  versesCount,
   reciterId,
   theme,
   font,
   fontScale,
   displayMode,
-  floatingTranslation,
   downloadStatus,
   downloadProgress,
   collapsed,
@@ -62,20 +68,33 @@ export function SetupPanel({
   onSurahChange,
   onModeChange,
   onRepeatsChange,
+  onRangeFromChange,
+  onRangeToChange,
   onReciterChange,
   onThemeChange,
   onFontChange,
   onFontScaleChange,
   onDisplayModeChange,
-  onFloatingTranslationChange,
   onDownload,
   onRemoveDownload,
   onPlay,
   isPlaying,
 }: Props) {
+  const [juzFilter, setJuzFilter] = useState<number | 'all'>('all')
   const surah = SURAH_LIST.find((s) => s.id === surahId)
-  const modeLabel = mode === 'ayah' ? 'Ayah' : 'Surah'
+  const modeLabel = mode === 'ayah' ? 'Ayah' : mode === 'range' ? `${rangeFrom}–${rangeTo}` : 'Surah'
   const summary = `${surah?.nameSimple ?? 'Surah'} · ${modeLabel} ×${repeats}`
+  const ayahOptions = Array.from({ length: versesCount }, (_, i) => i + 1)
+  const visibleSurahs = useMemo(() => filterSurahsByJuz(juzFilter), [juzFilter])
+
+  const handleJuzChange = (value: string) => {
+    const next = value === 'all' ? 'all' : Number(value)
+    setJuzFilter(next)
+    const list = filterSurahsByJuz(next)
+    if (!list.some((s) => s.id === surahId) && list[0]) {
+      onSurahChange(list[0].id)
+    }
+  }
 
   return (
     <aside className={`setup-panel${collapsed ? ' is-collapsed' : ''}`}>
@@ -103,7 +122,7 @@ export function SetupPanel({
         ) : (
           <div className="setup-toolbar-brand">
             <div className="brand">ReciteHelper</div>
-            <p className="brand-sub">Juz Amma · Memorize</p>
+            <p className="brand-sub">Full Quran · Memorize</p>
           </div>
         )}
       </div>
@@ -145,28 +164,6 @@ export function SetupPanel({
             </button>
           </div>
         </div>
-
-        {displayMode === 'mushaf' ? (
-          <div className="field">
-            <span className="field-label">Translation card</span>
-            <div className="segmented">
-              <button
-                type="button"
-                className={floatingTranslation ? 'active' : ''}
-                onClick={() => onFloatingTranslationChange(true)}
-              >
-                Floating
-              </button>
-              <button
-                type="button"
-                className={!floatingTranslation ? 'active' : ''}
-                onClick={() => onFloatingTranslationChange(false)}
-              >
-                Under page
-              </button>
-            </div>
-          </div>
-        ) : null}
 
         <label className="field">
           <span className="field-label">Arabic font</span>
@@ -211,9 +208,24 @@ export function SetupPanel({
         </div>
 
         <label className="field">
+          <span className="field-label">Juz</span>
+          <select
+            value={juzFilter === 'all' ? 'all' : String(juzFilter)}
+            onChange={(e) => handleJuzChange(e.target.value)}
+          >
+            <option value="all">All 30 juz</option>
+            {Array.from({ length: JUZ_COUNT }, (_, i) => i + 1).map((juz) => (
+              <option key={juz} value={juz}>
+                Juz {juz}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field">
           <span className="field-label">Surah</span>
           <select value={surahId} onChange={(e) => onSurahChange(Number(e.target.value))}>
-            {SURAH_LIST.map((s) => (
+            {visibleSurahs.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.id}. {s.nameSimple} · {s.nameArabic}
               </option>
@@ -223,7 +235,7 @@ export function SetupPanel({
 
         <div className="field">
           <span className="field-label">Mode</span>
-          <div className="segmented">
+          <div className="segmented segmented-3">
             <button
               type="button"
               className={mode === 'surah' ? 'active' : ''}
@@ -238,8 +250,40 @@ export function SetupPanel({
             >
               Ayah ×N
             </button>
+            <button
+              type="button"
+              className={mode === 'range' ? 'active' : ''}
+              onClick={() => onModeChange('range')}
+            >
+              A → B
+            </button>
           </div>
         </div>
+
+        {mode === 'range' ? (
+          <div className="field field-row">
+            <label className="field field-half">
+              <span className="field-label">From ayah</span>
+              <select value={rangeFrom} onChange={(e) => onRangeFromChange(Number(e.target.value))}>
+                {ayahOptions.map((n) => (
+                  <option key={`from-${n}`} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field field-half">
+              <span className="field-label">To ayah</span>
+              <select value={rangeTo} onChange={(e) => onRangeToChange(Number(e.target.value))}>
+                {ayahOptions.map((n) => (
+                  <option key={`to-${n}`} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
 
         <div className="field">
           <span className="field-label">Repeats</span>

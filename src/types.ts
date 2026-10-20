@@ -1,4 +1,4 @@
-export type RepeatMode = 'surah' | 'ayah'
+export type RepeatMode = 'surah' | 'ayah' | 'range'
 
 export type ThemeId = 'emerald' | 'indigo' | 'mushaf'
 
@@ -31,14 +31,16 @@ export interface AppPrefs {
   surahId: number
   mode: RepeatMode
   repeats: number
+  /** Inclusive start ayah when mode is `range`. */
+  rangeFrom: number
+  /** Inclusive end ayah when mode is `range`. */
+  rangeTo: number
   reciterId: string
   theme: ThemeId
   font: FontId
   /** Multiplier for Arabic / translation size (0.8–1.8). */
   fontScale: number
   displayMode: DisplayMode
-  /** In mushaf mode, show translation as a floating card over the page. */
-  floatingTranslation: boolean
 }
 
 export type DownloadStatus = 'idle' | 'downloading' | 'ready' | 'error'

@@ -1,14 +1,16 @@
 # ReciteHelper
 
-Landscape-first web app to help memorize **Juz Amma** (surahs 78–114).
+Landscape-first web app to help memorize the **full Quran** (30 juz / 114 surahs).
 
 ## Features
 
-- Pick a surah, reciter, and repeat mode (**Surah ×N** or **Ayah ×N**)
-- Play with ayah highlight + English under each ayah (**The Clear Quran** by Dr. Mustafa Khattab), right-aligned
+- All surahs, with optional **Juz** filter
+- Repeat modes: Surah ×N, Ayah ×N, or range **A → B**
+- Play with ayah highlight + English (**The Clear Quran**)
+- Mushaf page or ayah-list layout
 - Stream audio online; download a surah for offline playback
-- Three themes and four Arabic fonts (default: IBM Plex Sans Arabic)
-- Preferences saved in `localStorage` (no accounts)
+- Themes, Arabic fonts, text size, floating translation
+- Keyboard / Media Session controls, fullscreen, PWA install
 
 ## Develop
 
@@ -23,16 +25,14 @@ npm run preview
 npm test
 ```
 
-Design spec: `docs/superpowers/specs/2026-10-19-recitehelper-juz-amma-design.md`
-
-## Data
-
-- Arabic: Quran.com Uthmani text  
-- English: The Clear Quran (Mustafa Khattab) via open Quran API editions  
-- Audio: [EveryAyah](https://everyayah.com) CDN  
-
-Refresh bundled JSON:
+Refresh bundled Quran JSON (Arabic + Clear Quran):
 
 ```bash
 npm run fetch-data
 ```
+
+## Data
+
+- Arabic: Quran.com Uthmani text  
+- English: The Clear Quran (Mustafa Khattab)  
+- Audio: [EveryAyah](https://everyayah.com) CDN  

@@ -11,7 +11,7 @@ import {
   isSurahCached,
   removeSurah,
 } from './lib/offlineCache'
-import { loadPrefs, savePrefs } from './lib/prefs'
+import { clampAyahRange, loadPrefs, savePrefs } from './lib/prefs'
 import type {
   AppPrefs,
   DisplayMode,
@@ -30,6 +30,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null)
   const [panelCollapsed, setPanelCollapsed] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fsPanelOpen, setFsPanelOpen] = useState(false)
   const [isPortraitMobile, setIsPortraitMobile] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(PORTRAIT_MOBILE_MQ).matches : false,
   )
@@ -68,6 +69,13 @@ export default function App() {
   }, [prefs])
 
   useEffect(() => {
+    const range = clampAyahRange(prefs.rangeFrom, prefs.rangeTo, surah.versesCount)
+    if (range.rangeFrom !== prefs.rangeFrom || range.rangeTo !== prefs.rangeTo) {
+      setPrefs((p) => ({ ...p, ...range }))
+    }
+  }, [prefs.rangeFrom, prefs.rangeTo, surah.versesCount])
+
+  useEffect(() => {
     let cancelled = false
     setDownloadStatus('idle')
     setDownloadProgress('')
@@ -80,7 +88,11 @@ export default function App() {
   }, [prefs.reciterId, prefs.surahId, surah.versesCount])
 
   useEffect(() => {
-    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    const onFsChange = () => {
+      const active = Boolean(document.fullscreenElement)
+      setIsFullscreen(active)
+      if (!active) setFsPanelOpen(false)
+    }
     document.addEventListener('fullscreenchange', onFsChange)
     return () => document.removeEventListener('fullscreenchange', onFsChange)
   }, [])
@@ -90,6 +102,8 @@ export default function App() {
     versesCount: surah.versesCount,
     mode: prefs.mode,
     repeats: prefs.repeats,
+    rangeFrom: prefs.rangeFrom,
+    rangeTo: prefs.rangeTo,
     reciterId: prefs.reciterId,
     onToast,
   })
@@ -99,7 +113,7 @@ export default function App() {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: `${surah.nameSimple} · ${surah.nameArabic}`,
       artist: 'ReciteHelper',
-      album: 'Juz Amma',
+      album: 'Quran',
     })
   }, [surah])
 
@@ -109,7 +123,9 @@ export default function App() {
 
   const goToSurah = (id: number) => {
     player.stop()
-    update('surahId', id)
+    const versesCount = getSurah(id).versesCount
+    const range = clampAyahRange(1, versesCount, versesCount)
+    setPrefs((p) => ({ ...p, surahId: id, ...range }))
   }
 
   const handleDownload = async () => {
@@ -166,22 +182,29 @@ export default function App() {
   }
 
   const panelIsCollapsed = isPortraitMobile && panelCollapsed
+  const shellClass = [
+    'app-shell',
+    panelIsCollapsed ? 'panel-collapsed' : '',
+    isFullscreen ? 'is-fullscreen' : '',
+    isFullscreen && fsPanelOpen ? 'fs-panel-open' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
-    <div
-      ref={shellRef}
-      className={`app-shell${panelIsCollapsed ? ' panel-collapsed' : ''}${isFullscreen ? ' is-fullscreen' : ''}`}
-    >
+    <div ref={shellRef} className={shellClass}>
       <SetupPanel
         surahId={prefs.surahId}
         mode={prefs.mode}
         repeats={prefs.repeats}
+        rangeFrom={prefs.rangeFrom}
+        rangeTo={prefs.rangeTo}
+        versesCount={surah.versesCount}
         reciterId={prefs.reciterId}
         theme={prefs.theme}
         font={prefs.font}
         fontScale={prefs.fontScale}
         displayMode={prefs.displayMode}
-        floatingTranslation={prefs.floatingTranslation}
         downloadStatus={downloadStatus}
         downloadProgress={downloadProgress}
         collapsed={panelIsCollapsed}
@@ -195,6 +218,16 @@ export default function App() {
           player.stop()
           update('repeats', n)
         }}
+        onRangeFromChange={(n) => {
+          player.stop()
+          const range = clampAyahRange(n, prefs.rangeTo, surah.versesCount)
+          setPrefs((p) => ({ ...p, ...range }))
+        }}
+        onRangeToChange={(n) => {
+          player.stop()
+          const range = clampAyahRange(prefs.rangeFrom, n, surah.versesCount)
+          setPrefs((p) => ({ ...p, ...range }))
+        }}
         onReciterChange={(id) => {
           player.stop()
           update('reciterId', id)
@@ -203,7 +236,6 @@ export default function App() {
         onFontChange={(font: FontId) => update('font', font)}
         onFontScaleChange={(scale) => update('fontScale', scale)}
         onDisplayModeChange={(mode: DisplayMode) => update('displayMode', mode)}
-        onFloatingTranslationChange={(value) => update('floatingTranslation', value)}
         onDownload={() => void handleDownload()}
         onRemoveDownload={() => void handleRemove()}
         onPlay={() => player.play()}
@@ -214,14 +246,16 @@ export default function App() {
         <AyahReader
           ayahs={ayahs}
           activeAyah={player.currentAyah}
+          surahId={prefs.surahId}
           surahName={`${surah.nameSimple} · ${surah.nameArabic}`}
           displayMode={prefs.displayMode}
-          floatingTranslation={prefs.floatingTranslation}
           headerActions={
             <ReaderChrome
               isFullscreen={isFullscreen}
+              panelOpenInFullscreen={fsPanelOpen}
               canInstall={pwa.canInstall || !pwa.installed}
               onToggleFullscreen={() => void toggleFullscreen()}
+              onTogglePanel={() => setFsPanelOpen((v) => !v)}
               onInstall={() => void handleInstall()}
             />
           }

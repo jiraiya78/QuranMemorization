@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Scheherazade+New:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Amiri+Quran&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Scheherazade+New:wght@400;700&display=swap');
 
 :root,
 [data-theme='emerald'] {
@@ -86,20 +86,21 @@
   color: #d2b56b;
 }
 
+/* Quranic marks need capable fallbacks — IBM alone is missing some Uthmani glyphs */
 [data-font='ibm'] {
-  --arabic-font: 'IBM Plex Sans Arabic', 'Noto Naskh Arabic', serif;
+  --arabic-font: 'IBM Plex Sans Arabic', 'Amiri Quran', 'Noto Naskh Arabic', 'Scheherazade New', serif;
 }
 
 [data-font='amiri'] {
-  --arabic-font: 'Amiri', 'Noto Naskh Arabic', serif;
+  --arabic-font: 'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', serif;
 }
 
 [data-font='noto'] {
-  --arabic-font: 'Noto Naskh Arabic', serif;
+  --arabic-font: 'Noto Naskh Arabic', 'Amiri Quran', 'Scheherazade New', serif;
 }
 
 [data-font='scheherazade'] {
-  --arabic-font: 'Scheherazade New', 'Amiri', serif;
+  --arabic-font: 'Scheherazade New', 'Amiri Quran', 'Amiri', serif;
 }
 
 :root {
@@ -300,6 +301,20 @@ select {
   gap: 0.4rem;
 }
 
+.segmented-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.field-half {
+  min-width: 0;
+}
+
 .segmented button {
   border: 1px solid transparent;
   background: var(--control);
@@ -393,9 +408,18 @@ select {
 
 .ayah-reader {
   flex: 1 1 auto;
-  overflow: auto;
-  padding: 1.25rem 1.75rem 1rem;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
+  overflow: hidden;
+  padding: 1.25rem 1.75rem 0;
+}
+
+.ayah-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+  padding-bottom: 1rem;
   overscroll-behavior: contain;
 }
 
@@ -517,112 +541,398 @@ select {
   color: var(--text);
 }
 
-/* Rasm Uthmani mushaf page layout */
-.mushaf-page {
+/* Madani mushaf sheet — fixed line order, full size, scrolls with recitation */
+.mushaf-viewer {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
-  padding: 1.1rem 1.25rem 1.4rem;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: rgba(0, 0, 0, 0.12);
-  box-shadow: var(--shadow);
-  margin-bottom: 1rem;
+  height: 100%;
+  min-height: 0;
+  gap: 0.55rem;
 }
 
-[data-theme='mushaf'] .mushaf-page {
-  background: rgba(255, 252, 245, 0.72);
-  border-color: rgba(47, 74, 60, 0.28);
+.mushaf-page-chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-shrink: 0;
 }
 
-.mushaf-bismillah {
-  margin: 0;
+.mushaf-page-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  direction: rtl;
-  font-family: var(--arabic-font);
-  font-size: calc(clamp(1.55rem, 3vw, 2.1rem) * var(--font-scale, 1));
-  line-height: 1.8;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.mushaf-page-number {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.mushaf-page-limits {
+  font-size: 0.72rem;
   color: var(--text-muted);
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--border);
-  transition: color 0.25s ease, background 0.25s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(70vw, 22rem);
 }
 
-.mushaf-bismillah.active {
-  color: var(--text);
-  background: var(--ayah-active-bg);
+.mushaf-page-nav {
+  width: 2.4rem;
+  height: 2.4rem;
   border-radius: 10px;
-  padding: 0.45rem 0.6rem 0.75rem;
-  border-bottom-color: transparent;
-}
-
-.mushaf-text {
-  direction: rtl;
-  text-align: justify;
-  text-align-last: center;
-  font-family: var(--arabic-font);
-  font-size: calc(clamp(1.85rem, 3.8vw, 2.55rem) * var(--font-scale, 1));
-  line-height: 2.15;
-  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--control);
   color: var(--text);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
-.mushaf-ayah {
+.mushaf-page-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.mushaf-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.15rem 0.1rem 1rem;
+}
+
+.mushaf-sheet {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.mushaf-sheet-frame {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.85rem 0.85rem 0.65rem;
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, var(--border));
   border-radius: 6px;
-  padding: 0.05em 0.08em;
+  background:
+    linear-gradient(
+      165deg,
+      color-mix(in srgb, var(--bg-panel) 88%, #f5efe0) 0%,
+      color-mix(in srgb, var(--bg-panel) 92%, #e8dcc4) 100%
+    );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent),
+    var(--shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+[data-theme='mushaf'] .mushaf-sheet-frame {
+  background: linear-gradient(165deg, #fffdf7 0%, #f7f0e0 100%);
+  border-color: rgba(47, 74, 60, 0.45);
+}
+
+.mushaf-sheet.is-fatihah .mushaf-sheet-frame,
+.mushaf-sheet.is-baqarah .mushaf-sheet-frame,
+.mushaf-sheet.is-midquran .mushaf-sheet-frame {
+  border-width: 3px;
+  border-color: color-mix(in srgb, var(--accent) 70%, #b0893f);
+  background:
+    radial-gradient(ellipse at 50% 6%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 40%),
+    linear-gradient(165deg, #fffdf8 0%, #f3ead6 100%);
+}
+
+.mushaf-lines {
+  /* Same scale as ayah-list; row height = size × line-height */
+  --mushaf-size: calc(clamp(1.75rem, 3.6vw, 2.45rem) * var(--font-scale, 1));
+  --mushaf-line-height: 2.05;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  font-size: var(--mushaf-size);
+}
+
+.mushaf-line {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.28em;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(1em * var(--mushaf-line-height));
+  height: calc(1em * var(--mushaf-line-height));
+  padding: 0;
+  direction: rtl;
+  font-family: var(--arabic-font);
+  font-size: 1em;
+  font-weight: 700;
+  line-height: var(--mushaf-line-height);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.mushaf-line.is-short {
+  justify-content: flex-start;
+}
+
+.mushaf-line.is-full {
+  justify-content: space-between;
+  gap: 0.12em;
+}
+
+.mushaf-sheet.is-centered .mushaf-line:not(.is-ornament):not(.is-empty) {
+  justify-content: center;
+  gap: 0.28em;
+}
+
+.mushaf-line.is-empty {
+  visibility: hidden;
+}
+
+.mushaf-line.is-ornament {
+  justify-content: center;
+  white-space: normal;
+  height: auto;
+  min-height: calc(1em * var(--mushaf-line-height));
+  padding: 0.08em 0;
+  font-weight: 700;
+}
+
+.mushaf-line-ornament {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  font-family: var(--arabic-font);
+  color: var(--accent);
+}
+
+.mushaf-surah-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.55rem;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--control) 70%, var(--accent-soft)) 0%,
+      color-mix(in srgb, var(--accent-soft) 55%, transparent) 100%
+    );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+    inset 0 0 0 3px color-mix(in srgb, var(--control) 40%, transparent);
+}
+
+.mushaf-banner-wing {
+  flex: 1 1 auto;
+  min-width: 1.5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      var(--accent) 0 0.2rem,
+      transparent 0.2rem 0.38rem
+    ),
+    linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--accent) 55%, transparent) 14%,
+      color-mix(in srgb, var(--accent) 55%, transparent) 86%,
+      transparent
+    );
+  opacity: 0.75;
+  position: relative;
+}
+
+.mushaf-banner-wing::before,
+.mushaf-banner-wing::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 1.5px solid var(--accent);
+  transform: translateY(-50%) rotate(45deg);
+  background: color-mix(in srgb, var(--accent-soft) 80%, var(--accent));
+}
+
+.mushaf-banner-wing::before {
+  left: 0;
+}
+
+.mushaf-banner-wing::after {
+  right: 0;
+}
+
+.mushaf-banner-gem {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  background:
+    radial-gradient(
+      circle at 50% 50%,
+      color-mix(in srgb, var(--text) 35%, var(--accent)) 16%,
+      transparent 18%
+    ),
+    conic-gradient(
+      from 45deg,
+      var(--accent),
+      transparent 25%,
+      var(--accent) 50%,
+      transparent 75%,
+      var(--accent)
+    );
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-soft) 70%, transparent);
+}
+
+.mushaf-banner-core {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  flex-shrink: 0;
+  padding: 0 0.35rem;
+}
+
+.mushaf-ornament-title {
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  padding: 0 0.35rem;
+  color: var(--accent);
+}
+
+.mushaf-ornament-basmala {
+  font-size: 0.82em;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  line-height: var(--mushaf-line-height, 2.05);
+}
+
+.mushaf-line-ornament.with-basmala .mushaf-ornament-basmala {
+  margin-top: 0.2rem;
+}
+
+.mushaf-mid-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  opacity: 0.88;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.mushaf-sheet.is-fatihah .mushaf-ornament-title {
+  font-size: 0.8em;
+}
+
+.mushaf-line-ornament.is-basmala {
+  font-size: 1em;
+}
+
+.mushaf-seg {
+  display: contents;
+}
+
+.mushaf-word {
+  white-space: nowrap;
+  border-radius: 3px;
+  padding: 0.05em 0.02em;
   transition: background 0.25s ease, box-shadow 0.25s ease;
 }
 
-.mushaf-ayah.active {
+.mushaf-seg.active .mushaf-word,
+.mushaf-seg.active .mushaf-ayah-mark {
   background: var(--ayah-active-bg);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .mushaf-ayah-mark {
-  display: inline-block;
-  margin-inline: 0.18em 0.28em;
-  color: var(--accent);
-  font-size: 0.72em;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 1.65em;
+  height: 1.65em;
+  margin-inline: 0.14em 0.2em;
   vertical-align: middle;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
   font-family: var(--arabic-font);
+  line-height: 1;
+  flex-shrink: 0;
 }
 
-.mushaf-translation {
-  margin: 0;
-  direction: ltr;
-  text-align: right;
-  font-size: calc(clamp(0.95rem, 1.6vw, 1.1rem) * var(--font-scale, 1));
-  line-height: 1.55;
+.mushaf-ayah-mark-num {
+  display: block;
+  font-size: 0.58em;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+
+.mushaf-sheet-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding-top: 0.55rem;
+  font-family: var(--arabic-font);
+  font-size: 1.35rem;
+  font-weight: 700;
   color: var(--text);
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--border);
-  min-height: 2.5em;
 }
 
-.ayah-reader.has-floating-translation {
-  padding-bottom: 5.5rem;
+.ayah-reader.mode-mushaf .ayah-scroll {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 700px) and (orientation: portrait) {
+  .mushaf-line {
+    gap: 0.22em;
+  }
 }
 
 .floating-translation {
-  position: absolute;
-  left: 1rem;
-  right: 1rem;
-  bottom: 5.25rem;
-  z-index: 12;
-  padding: 0.75rem 1rem;
+  flex: 0 0 auto;
+  z-index: 5;
+  margin: 0 -0.25rem 0.65rem;
+  padding: 0.85rem 1rem;
   border-radius: 14px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg) 88%, black);
+  background: color-mix(in srgb, var(--bg) 92%, black);
   box-shadow: var(--shadow);
   backdrop-filter: blur(10px);
   direction: ltr;
   text-align: right;
-  pointer-events: none;
 }
 
 [data-theme='mushaf'] .floating-translation {
-  background: rgba(255, 252, 245, 0.94);
+  background: rgba(255, 252, 245, 0.96);
 }
 
 .floating-translation-label {
@@ -631,12 +941,12 @@ select {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.3rem;
 }
 
 .floating-translation p {
   margin: 0;
-  font-size: calc(clamp(0.95rem, 1.6vw, 1.15rem) * var(--font-scale, 1));
+  font-size: calc(clamp(1.05rem, 1.8vw, 1.25rem) * var(--font-scale, 1));
   line-height: 1.5;
   color: var(--text);
 }
@@ -690,7 +1000,11 @@ select {
   background: var(--accent-soft);
   color: var(--text);
   cursor: pointer;
-  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  padding: 0;
 }
 
 .ctrl-main {
@@ -698,7 +1012,17 @@ select {
   height: 58px;
   background: var(--accent);
   color: var(--accent-text);
-  font-size: 1.2rem;
+}
+
+.ctrl-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  display: block;
+}
+
+.ctrl-main .ctrl-icon {
+  width: 1.55rem;
+  height: 1.55rem;
 }
 
 .toast {
@@ -922,21 +1246,41 @@ select {
     font-size: 1.4rem;
   }
 
-  .floating-translation {
-    bottom: 6rem;
-    left: 0.75rem;
-    right: 0.75rem;
-  }
-
   .chrome-btn {
     min-height: 44px;
     padding: 0.55rem 0.85rem;
     font-size: 0.9rem;
   }
+
+  .floating-translation p {
+    font-size: calc(1.2rem * var(--font-scale, 1));
+  }
 }
 
-/* Car / landscape: oversized transport controls for easy tapping */
+/* Car / landscape: full-bleed mushaf + oversized transport */
 @media (orientation: landscape) {
+  .ayah-reader.mode-mushaf {
+    padding-inline: 0.55rem;
+  }
+
+  .mushaf-viewport {
+    padding-inline: 0;
+  }
+
+  .mushaf-sheet-frame {
+    padding-inline: 0.65rem;
+  }
+
+  .mushaf-lines {
+    /* Keep ayah-list scale; fit script only shrinks if a line overflows */
+    --mushaf-size: calc(clamp(1.75rem, 3.8vh, 2.45rem) * var(--font-scale, 1));
+    --mushaf-line-height: 2.05;
+  }
+
+  .mushaf-surah-banner {
+    padding: 0.35rem 0.45rem;
+  }
+
   .player-dock {
     padding: 0.65rem 1rem;
   }
@@ -944,7 +1288,6 @@ select {
   .ctrl {
     width: 64px;
     height: 64px;
-    font-size: 1.25rem;
   }
 
   .ctrl-surah {
@@ -955,19 +1298,52 @@ select {
   .ctrl-main {
     width: 78px;
     height: 78px;
-    font-size: 1.5rem;
+  }
+
+  .ctrl-icon {
+    width: 1.55rem;
+    height: 1.55rem;
+  }
+
+  .ctrl-main .ctrl-icon {
+    width: 1.85rem;
+    height: 1.85rem;
   }
 
   .dock-controls {
     gap: 0.65rem;
   }
 
-  .app-shell.is-fullscreen .setup-panel {
-    display: none;
+  .floating-translation {
+    padding: 1rem 1.15rem;
   }
 
-  .app-shell.is-fullscreen {
+  .floating-translation p {
+    font-size: calc(1.35rem * var(--font-scale, 1));
+    line-height: 1.45;
+  }
+}
+
+.app-shell.is-fullscreen:not(.fs-panel-open) .setup-panel {
+  display: none;
+}
+
+.app-shell.is-fullscreen:not(.fs-panel-open) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell.is-fullscreen.fs-panel-open {
+  grid-template-columns: minmax(0, 17.5rem) minmax(0, 1fr);
+}
+
+.app-shell.is-fullscreen.fs-panel-open .setup-panel {
+  display: flex;
+}
+
+@media (max-width: 900px) {
+  .app-shell.is-fullscreen.fs-panel-open {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 }
 
