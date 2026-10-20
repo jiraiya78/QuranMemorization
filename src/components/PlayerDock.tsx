@@ -6,9 +6,13 @@ interface Props {
   versesCount: number
   repeatIndex: number
   totalRepeats: number
+  canPrevSurah: boolean
+  canNextSurah: boolean
   onPrev: () => void
   onToggle: () => void
   onNext: () => void
+  onPrevSurah: () => void
+  onNextSurah: () => void
 }
 
 export function PlayerDock({
@@ -17,9 +21,13 @@ export function PlayerDock({
   versesCount,
   repeatIndex,
   totalRepeats,
+  canPrevSurah,
+  canNextSurah,
   onPrev,
   onToggle,
   onNext,
+  onPrevSurah,
+  onNextSurah,
 }: Props) {
   const ayahLabel = isBismillah(currentAyah)
     ? 'Bismillah'
@@ -31,7 +39,16 @@ export function PlayerDock({
         Repeat {repeatIndex} / {totalRepeats}
       </span>
       <div className="dock-controls">
-        <button type="button" className="ctrl" aria-label="Previous" onClick={onPrev}>
+        <button
+          type="button"
+          className="ctrl ctrl-surah"
+          aria-label="Previous surah"
+          disabled={!canPrevSurah}
+          onClick={onPrevSurah}
+        >
+          ⏪
+        </button>
+        <button type="button" className="ctrl" aria-label="Previous ayah" onClick={onPrev}>
           ⏮
         </button>
         <button
@@ -42,8 +59,17 @@ export function PlayerDock({
         >
           {isPlaying ? '⏸' : '▶'}
         </button>
-        <button type="button" className="ctrl" aria-label="Next" onClick={onNext}>
+        <button type="button" className="ctrl" aria-label="Next ayah" onClick={onNext}>
           ⏭
+        </button>
+        <button
+          type="button"
+          className="ctrl ctrl-surah"
+          aria-label="Next surah"
+          disabled={!canNextSurah}
+          onClick={onNextSurah}
+        >
+          ⏩
         </button>
       </div>
       <span className="dock-stat">{ayahLabel}</span>

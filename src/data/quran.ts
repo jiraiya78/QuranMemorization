@@ -24,3 +24,10 @@ export function getAyahs(surahId: number): Ayah[] {
     translation: a.translation.trim(),
   }))
 }
+
+export function getAdjacentSurahId(currentId: number, delta: -1 | 1): number | null {
+  const idx = SURAH_LIST.findIndex((s) => s.id === currentId)
+  if (idx < 0) return null
+  const next = SURAH_LIST[idx + delta]
+  return next ? next.id : null
+}

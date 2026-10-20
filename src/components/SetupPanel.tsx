@@ -25,6 +25,7 @@ interface Props {
   font: FontId
   fontScale: number
   displayMode: DisplayMode
+  floatingTranslation: boolean
   downloadStatus: DownloadStatus
   downloadProgress: string
   collapsed: boolean
@@ -37,6 +38,7 @@ interface Props {
   onFontChange: (font: FontId) => void
   onFontScaleChange: (scale: number) => void
   onDisplayModeChange: (mode: DisplayMode) => void
+  onFloatingTranslationChange: (value: boolean) => void
   onDownload: () => void
   onRemoveDownload: () => void
   onPlay: () => void
@@ -52,6 +54,7 @@ export function SetupPanel({
   font,
   fontScale,
   displayMode,
+  floatingTranslation,
   downloadStatus,
   downloadProgress,
   collapsed,
@@ -64,6 +67,7 @@ export function SetupPanel({
   onFontChange,
   onFontScaleChange,
   onDisplayModeChange,
+  onFloatingTranslationChange,
   onDownload,
   onRemoveDownload,
   onPlay,
@@ -141,6 +145,28 @@ export function SetupPanel({
             </button>
           </div>
         </div>
+
+        {displayMode === 'mushaf' ? (
+          <div className="field">
+            <span className="field-label">Translation card</span>
+            <div className="segmented">
+              <button
+                type="button"
+                className={floatingTranslation ? 'active' : ''}
+                onClick={() => onFloatingTranslationChange(true)}
+              >
+                Floating
+              </button>
+              <button
+                type="button"
+                className={!floatingTranslation ? 'active' : ''}
+                onClick={() => onFloatingTranslationChange(false)}
+              >
+                Under page
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <label className="field">
           <span className="field-label">Arabic font</span>

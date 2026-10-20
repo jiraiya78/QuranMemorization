@@ -14,6 +14,19 @@ interface UsePlayerOptions {
   onToast?: (message: string) => void
 }
 
+function findPrevIndex(list: { ayah: number; repeatIndex: number }[], from: number): number {
+  const cur = list[from]
+  if (!cur) return 0
+  let i = from - 1
+  while (i >= 0 && list[i].ayah === cur.ayah && list[i].repeatIndex === cur.repeatIndex) {
+    i--
+  }
+  if (i < 0) return 0
+  const targetAyah = list[i].ayah
+  while (i > 0 && list[i - 1].ayah === targetAyah) i--
+  return i
+}
+
 export function usePlayer({
   surahId,
   versesCount,
@@ -55,8 +68,9 @@ export function usePlayer({
     setTotalRepeats(item.totalRepeats)
   }, [])
 
-  const playAt = useCallback(
-    async (index: number) => {
+  /** Load playlist index. Only starts audio when `shouldPlay` is true. */
+  const goTo = useCallback(
+    async (index: number, shouldPlay: boolean) => {
       clearGap()
       const list = playlistRef.current
       if (index < 0 || index >= list.length) {
@@ -78,16 +92,24 @@ export function usePlayer({
         const url = await getPlayableUrl(reciterId, item.surahId, item.ayah)
         if (url.startsWith('blob:')) objectUrlsRef.current.push(url)
         audio.src = url
-        await audio.play()
-        playingRef.current = true
-        setIsPlaying(true)
+
+        if (shouldPlay) {
+          await audio.play()
+          playingRef.current = true
+          setIsPlaying(true)
+        } else {
+          audio.pause()
+          playingRef.current = false
+          setIsPlaying(false)
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Playback failed'
         onToast?.(msg)
-        // skip to next
-        gapTimerRef.current = window.setTimeout(() => {
-          void playAt(index + 1)
-        }, GAP_MS)
+        if (shouldPlay) {
+          gapTimerRef.current = window.setTimeout(() => {
+            void goTo(index + 1, true)
+          }, GAP_MS)
+        }
       }
     },
     [onToast, reciterId, syncMeta],
@@ -107,14 +129,15 @@ export function usePlayer({
     const onEnded = () => {
       if (!playingRef.current) return
       gapTimerRef.current = window.setTimeout(() => {
-        void playAt(indexRef.current + 1)
+        void goTo(indexRef.current + 1, true)
       }, GAP_MS)
     }
 
     const onError = () => {
+      if (!playingRef.current) return
       onToast?.('Could not play this ayah — skipping')
       gapTimerRef.current = window.setTimeout(() => {
-        void playAt(indexRef.current + 1)
+        void goTo(indexRef.current + 1, true)
       }, GAP_MS)
     }
 
@@ -127,13 +150,13 @@ export function usePlayer({
       audio.pause()
       revokeObjectUrls()
     }
-  }, [onToast, playAt])
+  }, [goTo, onToast])
 
   const play = useCallback(() => {
     playlistRef.current = buildPlaylist(surahId, versesCount, mode, repeats)
     setPlaylistLength(playlistRef.current.length)
-    void playAt(0)
-  }, [mode, playAt, repeats, surahId, versesCount])
+    void goTo(0, true)
+  }, [goTo, mode, repeats, surahId, versesCount])
 
   const pause = useCallback(() => {
     clearGap()
@@ -144,7 +167,7 @@ export function usePlayer({
 
   const resume = useCallback(() => {
     if (!audioRef.current?.src) {
-      void playAt(indexRef.current)
+      void goTo(indexRef.current, true)
       return
     }
     playingRef.current = true
@@ -154,7 +177,7 @@ export function usePlayer({
       setIsPlaying(false)
       playingRef.current = false
     })
-  }, [onToast, playAt])
+  }, [goTo, onToast])
 
   const toggle = useCallback(() => {
     if (isPlaying) pause()
@@ -163,27 +186,13 @@ export function usePlayer({
   }, [isPlaying, pause, play, resume])
 
   const next = useCallback(() => {
-    void playAt(indexRef.current + 1)
-  }, [playAt])
+    void goTo(indexRef.current + 1, playingRef.current)
+  }, [goTo])
 
   const prev = useCallback(() => {
-    const list = playlistRef.current
-    const cur = list[indexRef.current]
-    if (!cur) return
-    // jump to previous distinct ayah start if possible
-    let i = indexRef.current - 1
-    while (i >= 0 && list[i].ayah === cur.ayah && list[i].repeatIndex === cur.repeatIndex) {
-      i--
-    }
-    // go to start of previous ayah block
-    if (i >= 0) {
-      const targetAyah = list[i].ayah
-      while (i > 0 && list[i - 1].ayah === targetAyah) i--
-      void playAt(i)
-    } else {
-      void playAt(0)
-    }
-  }, [playAt])
+    const i = findPrevIndex(playlistRef.current, indexRef.current)
+    void goTo(i, playingRef.current)
+  }, [goTo])
 
   const stop = useCallback(() => {
     pause()
@@ -195,6 +204,68 @@ export function usePlayer({
     indexRef.current = 0
     syncMeta(0)
   }, [pause, syncMeta])
+
+  // Keyboard + Media Session (car / headset physical buttons)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+        return
+      }
+
+      if (e.code === 'Space') {
+        e.preventDefault()
+        toggle()
+        return
+      }
+      if (e.code === 'ArrowRight' || e.code === 'ArrowDown' || e.code === 'MediaTrackNext') {
+        e.preventDefault()
+        next()
+        return
+      }
+      if (e.code === 'ArrowLeft' || e.code === 'ArrowUp' || e.code === 'MediaTrackPrevious') {
+        e.preventDefault()
+        prev()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+
+    const ms = navigator.mediaSession
+    if (ms) {
+      try {
+        ms.setActionHandler('play', () => {
+          if (!playingRef.current) resume()
+        })
+        ms.setActionHandler('pause', () => {
+          if (playingRef.current) pause()
+        })
+        ms.setActionHandler('previoustrack', () => prev())
+        ms.setActionHandler('nexttrack', () => next())
+      } catch {
+        // Some browsers reject unsupported handlers
+      }
+    }
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      if (ms) {
+        try {
+          ms.setActionHandler('play', null)
+          ms.setActionHandler('pause', null)
+          ms.setActionHandler('previoustrack', null)
+          ms.setActionHandler('nexttrack', null)
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [next, pause, prev, resume, toggle])
+
+  useEffect(() => {
+    if (!navigator.mediaSession) return
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
+  }, [isPlaying])
 
   return {
     isPlaying,

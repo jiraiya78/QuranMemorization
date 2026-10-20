@@ -37,6 +37,8 @@ export interface AppPrefs {
   /** Multiplier for Arabic / translation size (0.8–1.8). */
   fontScale: number
   displayMode: DisplayMode
+  /** In mushaf mode, show translation as a floating card over the page. */
+  floatingTranslation: boolean
 }
 
 export type DownloadStatus = 'idle' | 'downloading' | 'ready' | 'error'

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { BISMILLAH, isBismillah } from '../data/bismillah'
 import { TRANSLATION_LABEL } from '../data/quran'
 import { toArabicIndic } from '../lib/arabicNumerals'
@@ -9,9 +9,18 @@ interface Props {
   activeAyah: number
   surahName: string
   displayMode: DisplayMode
+  floatingTranslation: boolean
+  headerActions?: ReactNode
 }
 
-export function AyahReader({ ayahs, activeAyah, surahName, displayMode }: Props) {
+export function AyahReader({
+  ayahs,
+  activeAyah,
+  surahName,
+  displayMode,
+  floatingTranslation,
+  headerActions,
+}: Props) {
   const activeRef = useRef<HTMLElement | null>(null)
   const setActiveNode = (node: HTMLElement | null) => {
     activeRef.current = node
@@ -26,11 +35,18 @@ export function AyahReader({ ayahs, activeAyah, surahName, displayMode }: Props)
     return ayahs.find((a) => a.number === activeAyah)?.translation ?? ''
   }, [activeAyah, ayahs])
 
+  const showFloating = displayMode === 'mushaf' && floatingTranslation
+
   return (
-    <div className={`ayah-reader mode-${displayMode}`}>
+    <div className={`ayah-reader mode-${displayMode}${showFloating ? ' has-floating-translation' : ''}`}>
       <header className="reader-header">
-        <h1>{surahName}</h1>
-        <p className="translation-credit">{TRANSLATION_LABEL}</p>
+        <div className="reader-header-row">
+          <div>
+            <h1>{surahName}</h1>
+            <p className="translation-credit">{TRANSLATION_LABEL}</p>
+          </div>
+          {headerActions}
+        </div>
       </header>
 
       {displayMode === 'mushaf' ? (
@@ -60,9 +76,11 @@ export function AyahReader({ ayahs, activeAyah, surahName, displayMode }: Props)
             })}
           </div>
 
-          <p className="mushaf-translation" dir="ltr">
-            {activeTranslation}
-          </p>
+          {!showFloating ? (
+            <p className="mushaf-translation" dir="ltr">
+              {activeTranslation}
+            </p>
+          ) : null}
         </div>
       ) : (
         <div className="ayah-list">
@@ -95,6 +113,13 @@ export function AyahReader({ ayahs, activeAyah, surahName, displayMode }: Props)
           })}
         </div>
       )}
+
+      {showFloating && activeTranslation ? (
+        <aside className="floating-translation" dir="ltr" aria-live="polite">
+          <span className="floating-translation-label">Translation</span>
+          <p>{activeTranslation}</p>
+        </aside>
+      ) : null}
     </div>
   )
 }

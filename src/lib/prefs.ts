@@ -16,6 +16,7 @@ const DEFAULTS: AppPrefs = {
   font: 'scheherazade',
   fontScale: 1,
   displayMode: 'mushaf',
+  floatingTranslation: true,
 }
 
 function normalizeDisplayMode(value: unknown): DisplayMode {
@@ -40,6 +41,10 @@ export function loadPrefs(): AppPrefs {
       repeats: Math.min(99, Math.max(1, Number(parsed.repeats) || DEFAULTS.repeats)),
       fontScale: clampFontScale(parsed.fontScale ?? DEFAULTS.fontScale),
       displayMode: normalizeDisplayMode(parsed.displayMode ?? DEFAULTS.displayMode),
+      floatingTranslation:
+        typeof parsed.floatingTranslation === 'boolean'
+          ? parsed.floatingTranslation
+          : DEFAULTS.floatingTranslation,
     }
   } catch {
     return { ...DEFAULTS }

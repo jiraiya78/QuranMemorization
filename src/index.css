@@ -384,6 +384,7 @@ select {
 .reader-pane {
   display: flex;
   flex-direction: column;
+  position: relative;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -402,6 +403,13 @@ select {
   margin-bottom: 1rem;
 }
 
+.reader-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .reader-header h1 {
   margin: 0;
   font-size: 1.35rem;
@@ -412,6 +420,32 @@ select {
   margin: 0.25rem 0 0;
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+.reader-chrome {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.chrome-btn {
+  border: 1px solid var(--border);
+  background: var(--control);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.45rem 0.75rem;
+  min-height: 40px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chrome-btn-accent {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .ayah-list {
@@ -564,6 +598,52 @@ select {
   padding-top: 0.85rem;
   border-top: 1px solid var(--border);
   min-height: 2.5em;
+}
+
+.ayah-reader.has-floating-translation {
+  padding-bottom: 5.5rem;
+}
+
+.floating-translation {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: 5.25rem;
+  z-index: 12;
+  padding: 0.75rem 1rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 88%, black);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  direction: ltr;
+  text-align: right;
+  pointer-events: none;
+}
+
+[data-theme='mushaf'] .floating-translation {
+  background: rgba(255, 252, 245, 0.94);
+}
+
+.floating-translation-label {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+}
+
+.floating-translation p {
+  margin: 0;
+  font-size: calc(clamp(0.95rem, 1.6vw, 1.15rem) * var(--font-scale, 1));
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.ctrl:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .player-dock {
@@ -813,28 +893,81 @@ select {
   }
 
   .player-dock {
-    padding: 0.45rem 0.75rem;
-    gap: 0.4rem;
-  }
-
-  .dock-stat {
-    font-size: 0.75rem;
-  }
-
-  .dock-controls {
+    padding: 0.55rem 0.75rem;
     gap: 0.45rem;
   }
 
+  .dock-stat {
+    font-size: 0.78rem;
+  }
+
+  .dock-controls {
+    gap: 0.55rem;
+  }
+
   .ctrl {
-    width: 48px;
-    height: 48px;
-    font-size: 1rem;
+    width: 58px;
+    height: 58px;
+    font-size: 1.2rem;
+  }
+
+  .ctrl-surah {
+    width: 52px;
+    height: 52px;
   }
 
   .ctrl-main {
-    width: 60px;
-    height: 60px;
-    font-size: 1.2rem;
+    width: 72px;
+    height: 72px;
+    font-size: 1.4rem;
+  }
+
+  .floating-translation {
+    bottom: 6rem;
+    left: 0.75rem;
+    right: 0.75rem;
+  }
+
+  .chrome-btn {
+    min-height: 44px;
+    padding: 0.55rem 0.85rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* Car / landscape: oversized transport controls for easy tapping */
+@media (orientation: landscape) {
+  .player-dock {
+    padding: 0.65rem 1rem;
+  }
+
+  .ctrl {
+    width: 64px;
+    height: 64px;
+    font-size: 1.25rem;
+  }
+
+  .ctrl-surah {
+    width: 56px;
+    height: 56px;
+  }
+
+  .ctrl-main {
+    width: 78px;
+    height: 78px;
+    font-size: 1.5rem;
+  }
+
+  .dock-controls {
+    gap: 0.65rem;
+  }
+
+  .app-shell.is-fullscreen .setup-panel {
+    display: none;
+  }
+
+  .app-shell.is-fullscreen {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
