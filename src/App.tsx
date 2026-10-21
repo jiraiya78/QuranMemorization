@@ -4,6 +4,7 @@ import { AyahReader } from './components/AyahReader'
 import { PlayerDock } from './components/PlayerDock'
 import { ReaderChrome } from './components/ReaderChrome'
 import { SettingsModal } from './components/SettingsModal'
+import { getPageForAyah } from './data/mushaf'
 import { getAdjacentSurahId, getAyahs, getSurah } from './data/quran'
 import { usePlayer } from './hooks/usePlayer'
 import { usePwaInstall } from './hooks/usePwaInstall'
@@ -38,6 +39,8 @@ export default function App() {
   const [fsPanelOpen, setFsPanelOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedAyah, setSelectedAyah] = useState<AyahRef | null>(null)
+  const [focusSurahId, setFocusSurahId] = useState<number | null>(null)
+  const [focusSurahKey, setFocusSurahKey] = useState(0)
   const [isPortraitMobile, setIsPortraitMobile] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(PORTRAIT_MOBILE_MQ).matches : false,
   )
@@ -61,7 +64,10 @@ export default function App() {
   const goToSurah = useCallback((id: number) => {
     const versesCount = getSurah(id).versesCount
     const range = clampAyahRange(1, versesCount, versesCount)
-    setPrefs((p) => ({ ...p, surahId: id, ...range }))
+    const pageNumber = getPageForAyah(id, 1)
+    setPrefs((p) => ({ ...p, surahId: id, ...range, pageNumber }))
+    setFocusSurahId(id)
+    setFocusSurahKey((k) => k + 1)
   }, [])
 
   const goToSurahRef = useRef(goToSurah)
@@ -347,6 +353,8 @@ export default function App() {
           selectedSurahId={selectedAyah?.surahId ?? null}
           selectedAyah={selectedAyah?.ayah ?? null}
           onSelectAyah={handleSelectAyah}
+          focusSurahId={focusSurahId}
+          focusSurahKey={focusSurahKey}
           chromeInHeader={chromeInHeader}
           headerActions={
             <ReaderChrome

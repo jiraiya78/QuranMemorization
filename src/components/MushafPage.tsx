@@ -3,6 +3,7 @@ import { BISMILLAH } from '../data/bismillah'
 import {
   getLineDecorations,
   getMushafPage,
+  getPageForAyah,
   getPageRangeLabel,
   getPageSurahNames,
   getSpecial,
@@ -24,6 +25,9 @@ interface Props {
   selectedSurahId?: number | null
   selectedAyah?: number | null
   onSelectAyah?: (ref: AyahRef) => void
+  /** Jump viewport to this surah's banner when `focusSurahKey` changes. */
+  focusSurahId?: number | null
+  focusSurahKey?: number
   onPageChange: (page: number) => void
   /** When true, page chrome is rendered by the parent (e.g. fullscreen landscape). */
   hideChrome?: boolean
@@ -97,7 +101,11 @@ function SurahBanner({
 }) {
   const meta = getSurah(surahId)
   return (
-    <div className={`mushaf-surah-banner${mid ? ' is-mid' : ''}`} aria-hidden>
+    <div
+      className={`mushaf-surah-banner${mid ? ' is-mid' : ''}`}
+      data-surah-banner={surahId}
+      aria-hidden
+    >
       <div className="mushaf-banner-pattern" />
       <div className="mushaf-banner-medallion" title={`${meta.versesCount} ayahs`}>
         <span className="mushaf-banner-medallion-num">{toArabicIndic(meta.versesCount)}</span>
@@ -152,12 +160,15 @@ export function MushafPage({
   selectedSurahId = null,
   selectedAyah = null,
   onSelectAyah,
+  focusSurahId = null,
+  focusSurahKey = 0,
   onPageChange,
   hideChrome = false,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const linesRootRef = useRef<HTMLDivElement | null>(null)
   const activeRef = useRef<HTMLElement | null>(null)
+  const scrolledFocusKeyRef = useRef(0)
 
   const pageData = useMemo(() => getMushafPage(page), [page])
   const special = getSpecial(page)
@@ -270,6 +281,41 @@ export function MushafPage({
     ro.observe(root)
     return () => ro.disconnect()
   }, [page, pageData, decorations, activeSurahId, activeAyah, selectedSurahId, selectedAyah])
+
+  /** After next/prev surah, pin the viewport to that surah's banner (once per focus key). */
+  useEffect(() => {
+    if (focusSurahId == null || focusSurahKey <= 0) return
+    if (scrolledFocusKeyRef.current === focusSurahKey) return
+    if (page !== getPageForAyah(focusSurahId, 1)) return
+
+    const root = linesRootRef.current
+    const viewport = viewportRef.current
+    if (!root || !viewport) return
+
+    let inner = 0
+    const outer = window.requestAnimationFrame(() => {
+      inner = window.requestAnimationFrame(() => {
+        const banner = root.querySelector<HTMLElement>(
+          `[data-surah-banner="${focusSurahId}"]`,
+        )
+        const target =
+          banner ??
+          root.querySelector<HTMLElement>(`[data-ayah^="${focusSurahId}:"]`)
+        scrolledFocusKeyRef.current = focusSurahKey
+        if (!target) {
+          viewport.scrollTo({ top: 0, behavior: 'smooth' })
+          return
+        }
+        const tRect = target.getBoundingClientRect()
+        const vRect = viewport.getBoundingClientRect()
+        viewport.scrollBy({ top: tRect.top - vRect.top - 6, behavior: 'smooth' })
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(outer)
+      window.cancelAnimationFrame(inner)
+    }
+  }, [focusSurahId, focusSurahKey, page])
 
   useEffect(() => {
     const root = linesRootRef.current

@@ -19,6 +19,8 @@ interface Props {
   selectedSurahId?: number | null
   selectedAyah?: number | null
   onSelectAyah?: (ref: AyahRef) => void
+  focusSurahId?: number | null
+  focusSurahKey?: number
   chromeInHeader?: boolean
   headerActions?: ReactNode
 }
@@ -80,10 +82,14 @@ export function AyahReader({
   selectedSurahId = null,
   selectedAyah = null,
   onSelectAyah,
+  focusSurahId = null,
+  focusSurahKey = 0,
   chromeInHeader = false,
   headerActions,
 }: Props) {
   const activeRef = useRef<HTMLElement | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const listFocusKeyRef = useRef(0)
   const setActiveNode = (node: HTMLElement | null) => {
     activeRef.current = node
   }
@@ -101,8 +107,13 @@ export function AyahReader({
 
   useEffect(() => {
     if (displayMode !== 'list') return
+    if (focusSurahKey > 0 && focusSurahKey !== listFocusKeyRef.current) {
+      listFocusKeyRef.current = focusSurahKey
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [activeAyah, displayMode])
+  }, [activeAyah, displayMode, focusSurahKey, surahId])
 
   const activeTranslation = useMemo(() => {
     if (isBismillah(activeAyah)) return BISMILLAH.translation
@@ -135,7 +146,7 @@ export function AyahReader({
         </div>
       </header>
 
-      <div className="ayah-scroll">
+      <div className="ayah-scroll" ref={scrollRef}>
         {displayMode === 'mushaf' ? (
           <MushafPage
             page={pageNumber}
@@ -144,6 +155,8 @@ export function AyahReader({
             selectedSurahId={selectedSurahId}
             selectedAyah={selectedAyah}
             onSelectAyah={onSelectAyah}
+            focusSurahId={focusSurahId}
+            focusSurahKey={focusSurahKey}
             onPageChange={onPageChange}
             hideChrome={chromeInHeader}
           />
