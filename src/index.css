@@ -535,21 +535,30 @@ select {
   white-space: nowrap;
 }
 
+.chrome-btn-icon {
+  width: 2.5rem;
+  min-width: 2.5rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chrome-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: block;
+}
+
 .chrome-btn-accent {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--text);
 }
 
-.chrome-btn-gear {
-  width: 2.5rem;
-  min-width: 2.5rem;
-  padding: 0;
-  font-size: 1.25rem;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.chrome-btn-library[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 
 .ayah-list {
@@ -622,7 +631,19 @@ select {
   font-family: var(--arabic-font);
   font-size: calc(clamp(1.75rem, 3.6vw, 2.45rem) * var(--font-scale, 1));
   line-height: 1.85;
-  font-weight: 500;
+  font-weight: var(--arabic-weight, 500);
+}
+
+html {
+  --arabic-weight: 700;
+}
+
+html[data-font-weight='regular'] {
+  --arabic-weight: 400;
+}
+
+html[data-font-weight='bold'] {
+  --arabic-weight: 700;
 }
 
 .ayah-translation {
@@ -705,6 +726,12 @@ select {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0.15rem 0.1rem 1rem;
+  touch-action: pan-y;
+}
+
+.mushaf-viewport.is-zoomed {
+  overflow-x: auto;
+  touch-action: manipulation;
 }
 
 .mushaf-sheet {
@@ -784,6 +811,22 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   font-size: var(--mushaf-size);
 }
 
+/* Narrow portrait: start smaller so JS fit can land without clipping */
+@media (max-width: 900px) and (orientation: portrait) {
+  .mushaf-lines {
+    --mushaf-size: calc(clamp(1.15rem, 4.5vw, 1.7rem) * var(--font-scale, 1));
+  }
+
+  .mushaf-sheet-frame {
+    padding: 0.55rem 0.4rem 0.45rem;
+  }
+
+  .mushaf-ayah-mark {
+    width: 1.65em;
+    height: 1.65em;
+  }
+}
+
 .mushaf-line {
   position: relative;
   display: flex;
@@ -800,7 +843,7 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   direction: rtl;
   font-family: var(--arabic-font);
   font-size: 1em;
-  font-weight: 700;
+  font-weight: var(--arabic-weight, 700);
   line-height: var(--mushaf-line-height);
   color: var(--text);
   white-space: nowrap;
@@ -1073,7 +1116,7 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   flex: 0 0 auto;
   z-index: 5;
   margin: 0 -0.25rem 0.65rem;
-  padding: 0.85rem 1rem;
+  padding: 0.7rem 1rem 0.75rem;
   border-radius: 14px;
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 92%, black);
@@ -1081,6 +1124,35 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   backdrop-filter: blur(10px);
   direction: ltr;
   text-align: right;
+  /* Long ayat: keep the panel to ~1/4 of the viewport; text scrolls inside. */
+  display: flex;
+  flex-direction: column;
+  max-height: 25dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.floating-translation.is-expanded {
+  max-height: 62dvh;
+}
+
+.floating-translation-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  /* Fade the last line so the scroll affordance is obvious */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4rem), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4rem), transparent 100%);
+}
+
+.floating-translation-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.floating-translation-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 [data-theme='mushaf'] .floating-translation {
@@ -1089,10 +1161,37 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
 
 .floating-translation-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.3rem;
+  flex-shrink: 0;
+}
+
+.floating-translation-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.floating-translation-toggle {
+  flex: 0 0 auto;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--control);
+  color: var(--text);
+  font-size: 0.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.floating-translation-toggle:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 
 .floating-translation-label {
@@ -1106,11 +1205,15 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   font-size: 0.68rem;
   color: var(--text-muted);
   text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .floating-translation p {
   margin: 0;
-  font-size: calc(clamp(1.05rem, 1.8vw, 1.25rem) * var(--font-scale, 1));
+  font-size: max(0.9rem, calc(var(--mushaf-fitted-size, 1.15rem) * 0.55));
   line-height: 1.5;
   color: var(--text);
 }
@@ -1262,39 +1365,85 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   }
 }
 
-/* Collapsible settings — mobile portrait only */
-@media (max-width: 900px) and (orientation: portrait) {
-  .collapse-toggle {
-    display: inline-flex;
-  }
-
-  .setup-panel.is-collapsed {
-    max-height: none;
-    padding: 0.55rem 0.75rem;
-    gap: 0;
-    overflow: hidden;
-  }
-
-  .setup-panel.is-collapsed .setup-body {
-    display: none;
-  }
-
-  .app-shell.panel-collapsed {
-    grid-template-rows: auto minmax(0, 1fr);
-  }
+/* Library pane visibility — toggled by book icon (all layouts) */
+.app-shell.panel-hidden {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-/* Desktop / landscape: always show full settings, no collapse chrome */
-@media (min-width: 901px), (orientation: landscape) {
-  .collapse-toggle,
-  .setup-summary,
-  .btn-compact {
-    display: none !important;
-  }
+.app-shell.panel-hidden .setup-panel {
+  display: none;
+}
 
-  .setup-panel.is-collapsed .setup-body {
-    display: flex;
-  }
+.app-shell.panel-open.is-portrait-mobile {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app-shell.panel-open.is-portrait-mobile .setup-panel {
+  max-height: none;
+  height: 100%;
+  border-right: none;
+  border-bottom: none;
+  z-index: 12;
+}
+
+.app-shell.panel-open.is-portrait-mobile .reader-pane {
+  display: none;
+}
+
+.setup-panel.is-fullscreen-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.setup-panel.is-fullscreen-pane .setup-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+}
+
+.setup-close-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  padding: 0.15rem 0;
+}
+
+.setup-close-bar-top {
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.25rem;
+}
+
+.setup-close-bar-bottom {
+  justify-content: stretch;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.35rem;
+}
+
+.setup-close-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.setup-close-bar-bottom .setup-close-btn {
+  width: 100%;
+  min-height: 48px;
+}
+
+.setup-brand-inline {
+  margin-bottom: 0.35rem;
+}
+
+/* Hide legacy collapse chrome (gear replaces it) */
+.collapse-toggle,
+.setup-summary,
+.btn-compact {
+  display: none !important;
 }
 
 /* Phone landscape: side-by-side with shrinkable columns (no overflow gap) */
@@ -1416,8 +1565,16 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
     font-size: 0.9rem;
   }
 
+  .floating-translation {
+    max-height: 24dvh;
+  }
+
+  .floating-translation.is-expanded {
+    max-height: 60dvh;
+  }
+
   .floating-translation p {
-    font-size: calc(1.2rem * var(--font-scale, 1));
+    font-size: max(0.95rem, calc(var(--mushaf-fitted-size, 1.2rem) * 0.56));
   }
 }
 
@@ -1518,32 +1675,13 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   }
 
   .floating-translation p {
-    font-size: calc(1.35rem * var(--font-scale, 1));
+    font-size: max(1rem, calc(var(--mushaf-fitted-size, 1.35rem) * 0.58));
     line-height: 1.45;
   }
 }
 
-.app-shell.is-fullscreen:not(.fs-panel-open) .setup-panel {
-  display: none;
-}
-
-.app-shell.is-fullscreen:not(.fs-panel-open) {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.app-shell.is-fullscreen.fs-panel-open {
+.app-shell.is-fullscreen.panel-open:not(.is-portrait-mobile) {
   grid-template-columns: minmax(0, 17.5rem) minmax(0, 1fr);
-}
-
-.app-shell.is-fullscreen.fs-panel-open .setup-panel {
-  display: flex;
-}
-
-@media (max-width: 900px) {
-  .app-shell.is-fullscreen.fs-panel-open {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
 }
 
 .settings-modal-backdrop {
@@ -1598,6 +1736,48 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   flex-direction: column;
   gap: 0.85rem;
   padding: 1rem;
+}
+
+.font-preview {
+  margin: 0.55rem 0 0;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--control);
+  color: var(--text);
+  font-family: var(--arabic-font);
+  font-size: calc(1.35rem * var(--font-scale, 1));
+  font-weight: 700;
+  line-height: 1.95;
+  text-align: center;
+  word-break: break-word;
+}
+
+.font-preview[data-font-weight='regular'] {
+  font-weight: 400;
+}
+
+.font-preview[data-font-weight='bold'] {
+  font-weight: 700;
+}
+
+.reciter-sample-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.55rem;
+}
+
+.btn-sample {
+  min-height: 42px;
+  padding: 0.45rem 0.9rem;
+}
+
+.field-error {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: #c0392b;
 }
 
 [data-theme='mushaf'] .setup-panel select {

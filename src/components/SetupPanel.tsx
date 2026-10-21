@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { filterSurahsByJuz, JUZ_COUNT, SURAH_LIST } from '../data/quran'
+import { filterSurahsByJuz, JUZ_COUNT } from '../data/quran'
 import type { DownloadStatus, RepeatMode, ThemeId } from '../types'
 
 const THEMES: { id: ThemeId; label: string }[] = [
@@ -17,8 +17,8 @@ interface Props {
   theme: ThemeId
   downloadStatus: DownloadStatus
   downloadProgress: string
-  collapsed: boolean
-  onToggleCollapsed: () => void
+  showCloseChrome?: boolean
+  onClose?: () => void
   onSurahChange: (id: number) => void
   onModeChange: (mode: RepeatMode) => void
   onRangeFromChange: (n: number) => void
@@ -26,9 +26,7 @@ interface Props {
   onThemeChange: (theme: ThemeId) => void
   onDownload: () => void
   onRemoveDownload: () => void
-  onPlay: () => void
   onOpenSettings: () => void
-  isPlaying: boolean
 }
 
 export function SetupPanel({
@@ -40,8 +38,8 @@ export function SetupPanel({
   theme,
   downloadStatus,
   downloadProgress,
-  collapsed,
-  onToggleCollapsed,
+  showCloseChrome = false,
+  onClose,
   onSurahChange,
   onModeChange,
   onRangeFromChange,
@@ -49,21 +47,9 @@ export function SetupPanel({
   onThemeChange,
   onDownload,
   onRemoveDownload,
-  onPlay,
   onOpenSettings,
-  isPlaying,
 }: Props) {
   const [juzFilter, setJuzFilter] = useState<number | 'all'>('all')
-  const surah = SURAH_LIST.find((s) => s.id === surahId)
-  const modeLabel =
-    mode === 'ayah'
-      ? 'Ayah'
-      : mode === 'range'
-        ? `${rangeFrom}–${rangeTo}`
-        : mode === 'page'
-          ? 'Page'
-          : 'Surah'
-  const summary = `${surah?.nameSimple ?? 'Surah'} · ${modeLabel}`
   const ayahOptions = Array.from({ length: versesCount }, (_, i) => i + 1)
   const visibleSurahs = useMemo(() => filterSurahsByJuz(juzFilter), [juzFilter])
 
@@ -77,37 +63,31 @@ export function SetupPanel({
   }
 
   return (
-    <aside className={`setup-panel${collapsed ? ' is-collapsed' : ''}`}>
-      <div className="setup-toolbar">
-        <button
-          type="button"
-          className="collapse-toggle"
-          aria-expanded={!collapsed}
-          aria-controls="setup-body"
-          onClick={onToggleCollapsed}
-        >
-          <span className="collapse-toggle-icon" aria-hidden="true">
-            {collapsed ? '▾' : '▴'}
-          </span>
-          <span className="collapse-toggle-label">{collapsed ? 'Settings' : 'Hide'}</span>
-        </button>
-
-        {collapsed ? (
-          <>
-            <p className="setup-summary">{summary}</p>
-            <button type="button" className="btn btn-primary btn-compact" onClick={onPlay}>
-              {isPlaying ? 'Restart' : 'Play'}
-            </button>
-          </>
-        ) : (
+    <aside className={`setup-panel${showCloseChrome ? ' is-fullscreen-pane' : ''}`}>
+      {showCloseChrome ? (
+        <div className="setup-close-bar setup-close-bar-top">
+          <span className="setup-close-title">Library</span>
+          <button type="button" className="btn btn-ghost setup-close-btn" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      ) : (
+        <div className="setup-toolbar">
           <div className="setup-toolbar-brand">
             <div className="brand">ReciteHelper</div>
             <p className="brand-sub">Full Quran · Memorize</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div id="setup-body" className="setup-body">
+        {!showCloseChrome ? null : (
+          <div className="setup-toolbar-brand setup-brand-inline">
+            <div className="brand">ReciteHelper</div>
+            <p className="brand-sub">Full Quran · Memorize</p>
+          </div>
+        )}
+
         <label className="field">
           <span className="field-label">Theme</span>
           <div className="theme-swatches" role="radiogroup" aria-label="Theme">
@@ -212,7 +192,7 @@ export function SetupPanel({
 
         <div className="setup-actions">
           <button type="button" className="btn btn-ghost" onClick={onOpenSettings}>
-            ⚙ Settings
+            ⚙ More settings
           </button>
           {downloadStatus === 'ready' ? (
             <button type="button" className="btn btn-ghost" onClick={onRemoveDownload}>
@@ -230,11 +210,16 @@ export function SetupPanel({
                 : '⬇ Download for offline'}
             </button>
           )}
-          <button type="button" className="btn btn-primary" onClick={onPlay}>
-            {isPlaying ? '▶ Restart' : '▶ Play'}
-          </button>
         </div>
       </div>
+
+      {showCloseChrome ? (
+        <div className="setup-close-bar setup-close-bar-bottom">
+          <button type="button" className="btn btn-primary setup-close-btn" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      ) : null}
     </aside>
   )
 }

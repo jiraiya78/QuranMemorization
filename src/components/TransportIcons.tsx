@@ -51,3 +51,47 @@ export function IconNextSurah() {
     </svg>
   )
 }
+
+export function IconFullscreen() {
+  return (
+    <svg className="chrome-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M7 14H5v5h5v-2H7v-3zm0-4h2V7h3V5H5v5h2zm10 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"
+      />
+    </svg>
+  )
+}
+
+export function IconFullscreenExit() {
+  return (
+    <svg className="chrome-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"
+      />
+    </svg>
+  )
+}
+
+export function IconDownload() {
+  return (
+    <svg className="chrome-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M5 20h14v-2H5v2zm7-18L5.3 10.7h3.7V16h6V10.7h3.7L12 2z"
+      />
+    </svg>
+  )
+}
+
+export function IconBook() {
+  return (
+    <svg className="chrome-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M18 2H8C6.9 2 6 2.9 6 4v16c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 18H8V4h2v8l2.5-1.5L15 12V4h3v16zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6z"
+      />
+    </svg>
+  )
+}

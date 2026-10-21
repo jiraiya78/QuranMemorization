@@ -20,10 +20,12 @@ import type {
   DisplayMode,
   DownloadStatus,
   FontId,
+  FontWeight,
   MushafWidth,
   PhysicalNav,
   RepeatMode,
   ThemeId,
+  TranslationId,
 } from './types'
 
 const PORTRAIT_MOBILE_MQ = '(max-width: 900px) and (orientation: portrait)'
@@ -34,9 +36,10 @@ export default function App() {
   const [downloadStatus, setDownloadStatus] = useState<DownloadStatus>('idle')
   const [downloadProgress, setDownloadProgress] = useState('')
   const [toast, setToast] = useState<string | null>(null)
-  const [panelCollapsed, setPanelCollapsed] = useState(true)
+  const [panelOpen, setPanelOpen] = useState(() =>
+    typeof window !== 'undefined' ? !window.matchMedia(PORTRAIT_MOBILE_MQ).matches : true,
+  )
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [fsPanelOpen, setFsPanelOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedAyah, setSelectedAyah] = useState<AyahRef | null>(null)
   const [focusSurahId, setFocusSurahId] = useState<number | null>(null)
@@ -53,7 +56,10 @@ export default function App() {
   const pwa = usePwaInstall()
 
   const surah = useMemo(() => getSurah(prefs.surahId), [prefs.surahId])
-  const ayahs = useMemo(() => getAyahs(prefs.surahId), [prefs.surahId])
+  const ayahs = useMemo(
+    () => getAyahs(prefs.surahId, prefs.translationId),
+    [prefs.surahId, prefs.translationId],
+  )
   const prevSurahId = useMemo(() => getAdjacentSurahId(prefs.surahId, -1), [prefs.surahId])
   const nextSurahId = useMemo(() => getAdjacentSurahId(prefs.surahId, 1), [prefs.surahId])
 
@@ -104,6 +110,7 @@ export default function App() {
     savePrefs(prefs)
     document.documentElement.dataset.theme = prefs.theme
     document.documentElement.dataset.font = prefs.font
+    document.documentElement.dataset.fontWeight = prefs.fontWeight
     document.documentElement.dataset.mushafWidth = prefs.mushafWidth
     document.documentElement.style.setProperty('--font-scale', String(prefs.fontScale))
   }, [prefs])
@@ -129,9 +136,7 @@ export default function App() {
 
   useEffect(() => {
     const onFsChange = () => {
-      const active = Boolean(document.fullscreenElement)
-      setIsFullscreen(active)
-      if (!active) setFsPanelOpen(false)
+      setIsFullscreen(Boolean(document.fullscreenElement))
     }
     document.addEventListener('fullscreenchange', onFsChange)
     return () => document.removeEventListener('fullscreenchange', onFsChange)
@@ -209,11 +214,6 @@ export default function App() {
     setSelectedAyah(null)
   }, [prefs.surahId, prefs.rangeFrom, prefs.rangeTo, prefs.mode, player.playFrom])
 
-  const handlePlay = useCallback(() => {
-    if (selectedAyah) playFromSelection(selectedAyah)
-    else player.play()
-  }, [playFromSelection, player.play, selectedAyah])
-
   const handleToggle = useCallback(() => {
     if (player.isPlaying) {
       player.pause()
@@ -283,9 +283,17 @@ export default function App() {
 
   const handleInstall = async () => {
     const ok = await pwa.install()
-    if (ok) setToast('App installed')
-    else if (!pwa.canInstall) {
-      setToast('Use browser menu → Add to Home Screen / Install')
+    if (ok) {
+      setToast('App installed')
+      return
+    }
+    const ua = navigator.userAgent
+    if (/iPhone|iPad|iPod/i.test(ua)) {
+      setToast('Safari: Share → Add to Home Screen')
+    } else if (/Android/i.test(ua)) {
+      setToast('Chrome menu (⋮) → Install app / Add to Home screen')
+    } else {
+      setToast('Chrome/Edge: install icon in the address bar, or menu → Install')
     }
   }
 
@@ -293,13 +301,12 @@ export default function App() {
     setPrefs((p) => (p.pageNumber === page ? p : { ...p, pageNumber: page }))
   }, [])
 
-  const panelIsCollapsed = isPortraitMobile && panelCollapsed
   const chromeInHeader = isFullscreen && isLandscape
   const shellClass = [
     'app-shell',
-    panelIsCollapsed ? 'panel-collapsed' : '',
+    panelOpen ? 'panel-open' : 'panel-hidden',
     isFullscreen ? 'is-fullscreen' : '',
-    isFullscreen && fsPanelOpen ? 'fs-panel-open' : '',
+    isPortraitMobile ? 'is-portrait-mobile' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -315,8 +322,6 @@ export default function App() {
         theme={prefs.theme}
         downloadStatus={downloadStatus}
         downloadProgress={downloadProgress}
-        collapsed={panelIsCollapsed}
-        onToggleCollapsed={() => setPanelCollapsed((v) => !v)}
         onSurahChange={changeSurah}
         onModeChange={(mode: RepeatMode) => {
           player.stop()
@@ -335,9 +340,9 @@ export default function App() {
         onThemeChange={(theme: ThemeId) => update('theme', theme)}
         onDownload={() => void handleDownload()}
         onRemoveDownload={() => void handleRemove()}
-        onPlay={handlePlay}
         onOpenSettings={() => setSettingsOpen(true)}
-        isPlaying={player.isPlaying}
+        showCloseChrome={isPortraitMobile}
+        onClose={() => setPanelOpen(false)}
       />
 
       <section className="reader-pane">
@@ -348,6 +353,8 @@ export default function App() {
           surahId={prefs.surahId}
           surahName={`${surah.nameSimple} · ${surah.nameArabic}`}
           displayMode={prefs.displayMode}
+          translationId={prefs.translationId}
+          showTranslation={prefs.showTranslation}
           pageNumber={prefs.pageNumber}
           onPageChange={setPageNumber}
           selectedSurahId={selectedAyah?.surahId ?? null}
@@ -355,14 +362,15 @@ export default function App() {
           onSelectAyah={handleSelectAyah}
           focusSurahId={focusSurahId}
           focusSurahKey={focusSurahKey}
+          fitKey={`${prefs.font}:${prefs.fontWeight}:${prefs.fontScale}`}
           chromeInHeader={chromeInHeader}
           headerActions={
             <ReaderChrome
               isFullscreen={isFullscreen}
-              panelOpenInFullscreen={fsPanelOpen}
+              panelOpen={panelOpen}
               canInstall={pwa.canInstall || !pwa.installed}
               onToggleFullscreen={() => void toggleFullscreen()}
-              onTogglePanel={() => setFsPanelOpen((v) => !v)}
+              onTogglePanel={() => setPanelOpen((v) => !v)}
               onInstall={() => void handleInstall()}
             />
           }
@@ -392,14 +400,20 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         displayMode={prefs.displayMode}
         font={prefs.font}
+        fontWeight={prefs.fontWeight}
         fontScale={prefs.fontScale}
+        translationId={prefs.translationId}
+        showTranslation={prefs.showTranslation}
         physicalNav={prefs.physicalNav}
         mushafWidth={prefs.mushafWidth}
         repeats={prefs.repeats}
         reciterId={prefs.reciterId}
         onDisplayModeChange={(mode: DisplayMode) => update('displayMode', mode)}
         onFontChange={(font: FontId) => update('font', font)}
+        onFontWeightChange={(weight: FontWeight) => update('fontWeight', weight)}
         onFontScaleChange={(scale) => update('fontScale', scale)}
+        onTranslationChange={(id: TranslationId) => update('translationId', id)}
+        onShowTranslationChange={(show: boolean) => update('showTranslation', show)}
         onPhysicalNavChange={(value: PhysicalNav) => update('physicalNav', value)}
         onMushafWidthChange={(value: MushafWidth) => update('mushafWidth', value)}
         onRepeatsChange={(n) => {

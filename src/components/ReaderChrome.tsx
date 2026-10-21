@@ -1,6 +1,13 @@
+import {
+  IconBook,
+  IconDownload,
+  IconFullscreen,
+  IconFullscreenExit,
+} from './TransportIcons'
+
 interface Props {
   isFullscreen: boolean
-  panelOpenInFullscreen: boolean
+  panelOpen: boolean
   canInstall: boolean
   onToggleFullscreen: () => void
   onTogglePanel: () => void
@@ -9,7 +16,7 @@ interface Props {
 
 export function ReaderChrome({
   isFullscreen,
-  panelOpenInFullscreen,
+  panelOpen,
   canInstall,
   onToggleFullscreen,
   onTogglePanel,
@@ -17,29 +24,34 @@ export function ReaderChrome({
 }: Props) {
   return (
     <div className="reader-chrome">
-      {isFullscreen ? (
-        <button
-          type="button"
-          className="chrome-btn chrome-btn-gear"
-          aria-label={panelOpenInFullscreen ? 'Hide settings panel' : 'Open settings panel'}
-          aria-pressed={panelOpenInFullscreen}
-          title={panelOpenInFullscreen ? 'Hide settings' : 'Settings'}
-          onClick={onTogglePanel}
-        >
-          <span aria-hidden="true">⚙</span>
-        </button>
-      ) : null}
       <button
         type="button"
-        className="chrome-btn"
+        className="chrome-btn chrome-btn-icon chrome-btn-library"
+        aria-label={panelOpen ? 'Hide library' : 'Open library'}
+        aria-pressed={panelOpen}
+        title={panelOpen ? 'Hide library' : 'Library'}
+        onClick={onTogglePanel}
+      >
+        <IconBook />
+      </button>
+      <button
+        type="button"
+        className="chrome-btn chrome-btn-icon"
         aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+        title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
         onClick={onToggleFullscreen}
       >
-        {isFullscreen ? 'Exit full' : 'Fullscreen'}
+        {isFullscreen ? <IconFullscreenExit /> : <IconFullscreen />}
       </button>
       {canInstall ? (
-        <button type="button" className="chrome-btn chrome-btn-accent" onClick={onInstall}>
-          Install app
+        <button
+          type="button"
+          className="chrome-btn chrome-btn-icon chrome-btn-accent"
+          aria-label="Install app"
+          title="Install app"
+          onClick={onInstall}
+        >
+          <IconDownload />
         </button>
       ) : null}
     </div>

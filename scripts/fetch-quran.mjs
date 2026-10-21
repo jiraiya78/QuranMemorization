@@ -33,6 +33,19 @@ function assertNoReplacement(text, label) {
   }
 }
 
+const EDITIONS = {
+  en: {
+    id: 'en',
+    label: 'The Clear Quran (Dr. Mustafa Khattab)',
+    path: 'eng-mustafakhattaba',
+  },
+  ms: {
+    id: 'ms',
+    label: 'Bahasa Melayu (Sheikh Abdullah bin Muhammad Basmeih)',
+    path: 'msa-abdullahmuhamma',
+  },
+}
+
 const surahMeta = await get('https://api.quran.com/api/v4/chapters?language=en')
 const surahs = surahMeta.chapters.map((c) => ({
   id: c.id,
@@ -59,16 +72,21 @@ for (const s of surahs) {
     `https://api.quran.com/api/v4/quran/verses/uthmani?chapter_number=${s.id}`,
   )
   const en = await get(
-    `https://raw.githubusercontent.com/fawazahmed0/quran-api/1/editions/eng-mustafakhattaba/${s.id}.json`,
+    `https://raw.githubusercontent.com/fawazahmed0/quran-api/1/editions/${EDITIONS.en.path}/${s.id}.json`,
+  )
+  const ms = await get(
+    `https://raw.githubusercontent.com/fawazahmed0/quran-api/1/editions/${EDITIONS.ms.path}/${s.id}.json`,
   )
   ayahs[s.id] = ar.verses.map((v, i) => {
     const arabic = v.text_uthmani
-    const translation = (en.chapter[i] && en.chapter[i].text) || ''
+    const enText = (en.chapter[i] && en.chapter[i].text) || ''
+    const msText = (ms.chapter[i] && ms.chapter[i].text) || ''
     assertNoReplacement(arabic, `surah ${s.id} ayah ${i + 1}`)
     return {
       number: i + 1,
       arabic,
-      translation,
+      en: enText,
+      ms: msText,
     }
   })
   console.log('surah', s.id, ayahs[s.id].length)
@@ -81,7 +99,10 @@ const payload = {
   surahs,
   ayahs,
   juzSurahIds,
-  translation: 'The Clear Quran (Dr. Mustafa Khattab)',
+  translations: {
+    en: { id: 'en', label: EDITIONS.en.label },
+    ms: { id: 'ms', label: EDITIONS.ms.label },
+  },
 }
 fs.writeFileSync(outPath, JSON.stringify(payload))
 console.log('wrote', outPath, fs.statSync(outPath).size)

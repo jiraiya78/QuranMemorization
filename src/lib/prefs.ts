@@ -1,13 +1,28 @@
-import type { AppPrefs, DisplayMode, MushafWidth, PhysicalNav, RepeatMode } from '../types'
+import type {
+  AppPrefs,
+  DisplayMode,
+  FontWeight,
+  MushafWidth,
+  PhysicalNav,
+  RepeatMode,
+  TranslationId,
+} from '../types'
 import { RECITERS } from '../data/reciters'
 import { MUSHAF_PAGE_COUNT } from '../data/mushaf'
 import { getSurah } from '../data/quran'
 
 const KEY = 'recitehelper.prefs.v1'
+const PORTRAIT_MOBILE_MQ = '(max-width: 900px) and (orientation: portrait)'
 
 export const FONT_SCALE_MIN = 0.8
 export const FONT_SCALE_MAX = 1.8
 export const FONT_SCALE_STEP = 0.1
+
+/** Regular on phone portrait (clearer at small sizes); bold elsewhere. */
+export function defaultFontWeight(): FontWeight {
+  if (typeof window === 'undefined') return 'bold'
+  return window.matchMedia(PORTRAIT_MOBILE_MQ).matches ? 'regular' : 'bold'
+}
 
 const DEFAULTS: AppPrefs = {
   surahId: 1,
@@ -19,7 +34,10 @@ const DEFAULTS: AppPrefs = {
   reciterId: RECITERS[0].id,
   theme: 'emerald',
   font: 'scheherazade',
+  fontWeight: 'bold',
   fontScale: 1,
+  translationId: 'en',
+  showTranslation: true,
   displayMode: 'mushaf',
   physicalNav: 'ayah',
   mushafWidth: 'auto',
@@ -43,6 +61,15 @@ function normalizePhysicalNav(value: unknown): PhysicalNav {
 function normalizeMushafWidth(value: unknown): MushafWidth {
   if (value === 'full' || value === 'a4' || value === 'auto') return value
   return DEFAULTS.mushafWidth
+}
+
+function normalizeFontWeight(value: unknown): FontWeight {
+  if (value === 'regular' || value === 'bold') return value
+  return defaultFontWeight()
+}
+
+function normalizeTranslationId(value: unknown): TranslationId {
+  return value === 'ms' ? 'ms' : 'en'
 }
 
 function clampPageNumber(value: unknown): number {
@@ -69,9 +96,14 @@ export function clampAyahRange(
 }
 
 export function loadPrefs(): AppPrefs {
+  const withWeightDefaults = (): AppPrefs => ({
+    ...DEFAULTS,
+    fontWeight: defaultFontWeight(),
+  })
+
   try {
     const raw = localStorage.getItem(KEY)
-    if (!raw) return { ...DEFAULTS }
+    if (!raw) return withWeightDefaults()
     const parsed = JSON.parse(raw) as Partial<AppPrefs> & {
       floatingTranslation?: boolean
     }
@@ -93,12 +125,18 @@ export function loadPrefs(): AppPrefs {
       ...range,
       pageNumber: clampPageNumber(rest.pageNumber ?? DEFAULTS.pageNumber),
       fontScale: clampFontScale(rest.fontScale ?? DEFAULTS.fontScale),
+      fontWeight: normalizeFontWeight(rest.fontWeight),
+      translationId: normalizeTranslationId(rest.translationId),
+      showTranslation:
+        typeof rest.showTranslation === 'boolean'
+          ? rest.showTranslation
+          : DEFAULTS.showTranslation,
       displayMode: normalizeDisplayMode(rest.displayMode ?? DEFAULTS.displayMode),
       physicalNav: normalizePhysicalNav(rest.physicalNav),
       mushafWidth: normalizeMushafWidth(rest.mushafWidth),
     }
   } catch {
-    return { ...DEFAULTS }
+    return withWeightDefaults()
   }
 }
 

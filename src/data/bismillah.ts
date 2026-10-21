@@ -1,4 +1,5 @@
-import { getAyahs, getBismillahArabic } from './quran'
+import { getBismillahArabic, getBismillahTranslation } from './quran'
+import type { TranslationId } from '../types'
 
 /** Special playlist/ayah marker for the opening Basmala (not a numbered ayah). */
 export const BISMILLAH_AYAH = 0
@@ -12,11 +13,15 @@ export const BISMILLAH = {
     return getBismillahArabic()
   },
   get translation() {
-    return (
-      getAyahs(1)[0]?.translation ||
-      'In the Name of Allah—the Most Compassionate, Most Merciful.'
-    )
+    return getBismillahTranslation('en')
   },
+}
+
+export function getBismillah(translationId: TranslationId = 'en') {
+  return {
+    arabic: getBismillahArabic(),
+    translation: getBismillahTranslation(translationId),
+  }
 }
 
 export function isBismillah(ayah: number): boolean {

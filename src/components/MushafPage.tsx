@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { BISMILLAH } from '../data/bismillah'
 import {
   getLineDecorations,
@@ -17,6 +17,8 @@ import { useAyahSelectHandlers, type AyahRef } from '../lib/ayahSelect'
 import { MushafPageChrome } from './MushafPageChrome'
 
 const LINE_SLOTS = 15
+const ZOOM_MIN = 0.7
+const ZOOM_MAX = 2.4
 
 interface Props {
   page: number
@@ -28,6 +30,8 @@ interface Props {
   /** Jump viewport to this surah's banner when `focusSurahKey` changes. */
   focusSurahId?: number | null
   focusSurahKey?: number
+  /** Re-fit Madani lines when weight/family scale changes. */
+  fitKey?: string | number
   onPageChange: (page: number) => void
   /** When true, page chrome is rendered by the parent (e.g. fullscreen landscape). */
   hideChrome?: boolean
@@ -162,6 +166,7 @@ export function MushafPage({
   onSelectAyah,
   focusSurahId = null,
   focusSurahKey = 0,
+  fitKey = '',
   onPageChange,
   hideChrome = false,
 }: Props) {
@@ -169,6 +174,10 @@ export function MushafPage({
   const linesRootRef = useRef<HTMLDivElement | null>(null)
   const activeRef = useRef<HTMLElement | null>(null)
   const scrolledFocusKeyRef = useRef(0)
+  const baseFitRef = useRef(0)
+  const zoomRef = useRef(1)
+  const [zoom, setZoom] = useState(1)
+  zoomRef.current = zoom
 
   const pageData = useMemo(() => getMushafPage(page), [page])
   const special = getSpecial(page)
@@ -186,7 +195,13 @@ export function MushafPage({
 
   useEffect(() => {
     const root = linesRootRef.current
+    const viewport = viewportRef.current
     if (!root) return
+
+    const publishFittedSize = (px: number) => {
+      const reader = root.closest('.ayah-reader') as HTMLElement | null
+      if (reader) reader.style.setProperty('--mushaf-fitted-size', `${px}px`)
+    }
 
     const paintHighlights = () => {
       for (const old of root.querySelectorAll('.mushaf-line-highlight')) {
@@ -235,6 +250,13 @@ export function MushafPage({
       }
     }
 
+    const applySize = (basePx: number, zoomFactor: number) => {
+      const px = Math.max(8, basePx * zoomFactor)
+      root.style.fontSize = `${px}px`
+      publishFittedSize(px)
+      return px
+    }
+
     const fit = () => {
       const lines = [
         ...root.querySelectorAll<HTMLElement>(
@@ -243,19 +265,27 @@ export function MushafPage({
       ]
       if (lines.length === 0) return
 
+      // Measure at CSS default (zoom=1) so Madani lines stay intact.
       root.style.fontSize = ''
       const computed = Number.parseFloat(getComputedStyle(root).fontSize)
       if (!Number.isFinite(computed) || computed <= 0) return
 
-      let lo = Math.max(12, computed * 0.72)
-      let hi = computed
-      let best = computed
+      const narrow =
+        typeof window !== 'undefined' &&
+        window.matchMedia('(max-width: 900px) and (orientation: portrait)').matches
+      const floor = Math.max(narrow ? 9 : 11, computed * (narrow ? 0.42 : 0.55))
 
       const overflows = () =>
-        lines.some((line) => line.scrollWidth > line.clientWidth + 1)
+        lines.some((line) => line.scrollWidth > line.clientWidth + 0.5)
 
-      if (overflows()) {
-        for (let i = 0; i < 14; i++) {
+      let lo = floor
+      let hi = computed
+      let best = floor
+
+      root.style.fontSize = `${floor}px`
+      if (!overflows()) {
+        best = floor
+        for (let i = 0; i < 18; i++) {
           const mid = (lo + hi) / 2
           root.style.fontSize = `${mid}px`
           if (overflows()) {
@@ -265,22 +295,96 @@ export function MushafPage({
             lo = mid
           }
         }
-        root.style.fontSize = `${best}px`
       }
+
+      baseFitRef.current = best
+      applySize(best, zoomRef.current)
 
       for (const line of lines) {
         const fill = line.scrollWidth / Math.max(1, line.clientWidth)
-        line.classList.toggle('is-full', fill >= 0.9)
+        line.classList.toggle('is-full', fill >= 0.9 && zoomRef.current <= 1.01)
+      }
+
+      if (viewport) {
+        viewport.classList.toggle('is-zoomed', zoomRef.current > 1.01)
       }
 
       paintHighlights()
     }
 
     fit()
-    const ro = new ResizeObserver(fit)
+    const ro = new ResizeObserver(() => fit())
     ro.observe(root)
+    if (viewport) ro.observe(viewport)
     return () => ro.disconnect()
-  }, [page, pageData, decorations, activeSurahId, activeAyah, selectedSurahId, selectedAyah])
+  }, [page, pageData, decorations, activeSurahId, activeAyah, selectedSurahId, selectedAyah, fitKey])
+
+  /** Re-apply zoom without re-fitting the Madani base size. */
+  useEffect(() => {
+    const root = linesRootRef.current
+    const viewport = viewportRef.current
+    if (!root || baseFitRef.current <= 0) return
+    const px = Math.max(8, baseFitRef.current * zoom)
+    root.style.fontSize = `${px}px`
+    const reader = root.closest('.ayah-reader') as HTMLElement | null
+    if (reader) reader.style.setProperty('--mushaf-fitted-size', `${px}px`)
+    viewport?.classList.toggle('is-zoomed', zoom > 1.01)
+
+    for (const line of root.querySelectorAll<HTMLElement>(
+      '.mushaf-line:not(.is-empty):not(.is-ornament)',
+    )) {
+      const fill = line.scrollWidth / Math.max(1, line.clientWidth)
+      line.classList.toggle('is-full', fill >= 0.9 && zoom <= 1.01)
+    }
+  }, [zoom])
+
+  /** Pinch-to-zoom on the mushaf viewport. */
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    let startDist = 0
+    let startZoom = 1
+
+    const distance = (a: Touch, b: Touch) => {
+      const dx = a.clientX - b.clientX
+      const dy = a.clientY - b.clientY
+      return Math.hypot(dx, dy)
+    }
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return
+      startDist = distance(e.touches[0]!, e.touches[1]!)
+      startZoom = zoomRef.current
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || startDist <= 0) return
+      e.preventDefault()
+      const ratio = distance(e.touches[0]!, e.touches[1]!) / startDist
+      const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, startZoom * ratio))
+      setZoom(next)
+    }
+
+    const onTouchEnd = () => {
+      startDist = 0
+    }
+
+    viewport.addEventListener('touchstart', onTouchStart, { passive: true })
+    viewport.addEventListener('touchmove', onTouchMove, { passive: false })
+    viewport.addEventListener('touchend', onTouchEnd)
+    viewport.addEventListener('touchcancel', onTouchEnd)
+    return () => {
+      viewport.removeEventListener('touchstart', onTouchStart)
+      viewport.removeEventListener('touchmove', onTouchMove)
+      viewport.removeEventListener('touchend', onTouchEnd)
+      viewport.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [])
+
+  useEffect(() => {
+    setZoom(1)
+  }, [page])
 
   /** After next/prev surah, pin the viewport to that surah's banner (once per focus key). */
   useEffect(() => {
