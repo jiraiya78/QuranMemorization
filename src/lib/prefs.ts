@@ -1,4 +1,4 @@
-import type { AppPrefs, DisplayMode, PhysicalNav, RepeatMode } from '../types'
+import type { AppPrefs, DisplayMode, MushafWidth, PhysicalNav, RepeatMode } from '../types'
 import { RECITERS } from '../data/reciters'
 import { MUSHAF_PAGE_COUNT } from '../data/mushaf'
 import { getSurah } from '../data/quran'
@@ -22,6 +22,7 @@ const DEFAULTS: AppPrefs = {
   fontScale: 1,
   displayMode: 'mushaf',
   physicalNav: 'ayah',
+  mushafWidth: 'auto',
 }
 
 function normalizeDisplayMode(value: unknown): DisplayMode {
@@ -37,6 +38,11 @@ function normalizeMode(value: unknown): RepeatMode {
 
 function normalizePhysicalNav(value: unknown): PhysicalNav {
   return value === 'surah' ? 'surah' : 'ayah'
+}
+
+function normalizeMushafWidth(value: unknown): MushafWidth {
+  if (value === 'full' || value === 'a4' || value === 'auto') return value
+  return DEFAULTS.mushafWidth
 }
 
 function clampPageNumber(value: unknown): number {
@@ -89,6 +95,7 @@ export function loadPrefs(): AppPrefs {
       fontScale: clampFontScale(rest.fontScale ?? DEFAULTS.fontScale),
       displayMode: normalizeDisplayMode(rest.displayMode ?? DEFAULTS.displayMode),
       physicalNav: normalizePhysicalNav(rest.physicalNav),
+      mushafWidth: normalizeMushafWidth(rest.mushafWidth),
     }
   } catch {
     return { ...DEFAULTS }

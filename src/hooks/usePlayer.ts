@@ -202,6 +202,34 @@ export function usePlayer({
     void goTo(0, true)
   }, [goTo, rebuildPlaylist])
 
+  /** Start (or restart) from a specific ayah in the current playlist. */
+  const playFrom = useCallback(
+    (targetSurahId: number, targetAyah: number) => {
+      rebuildPlaylist()
+      const list = playlistRef.current
+      let idx = list.findIndex(
+        (item) => item.surahId === targetSurahId && item.ayah === targetAyah,
+      )
+      if (idx < 0) {
+        onToast?.('Selected ayah is outside the current play mode')
+        return
+      }
+      // Prefer first repeat of that ayah
+      while (idx > 0) {
+        const prevItem = list[idx - 1]
+        if (
+          prevItem &&
+          prevItem.surahId === targetSurahId &&
+          prevItem.ayah === targetAyah
+        ) {
+          idx -= 1
+        } else break
+      }
+      void goTo(idx, true)
+    },
+    [goTo, onToast, rebuildPlaylist],
+  )
+
   const pause = useCallback(() => {
     clearGap()
     playingRef.current = false
@@ -336,6 +364,7 @@ export function usePlayer({
     totalRepeats,
     playlistLength,
     play,
+    playFrom,
     pause,
     toggle,
     next,

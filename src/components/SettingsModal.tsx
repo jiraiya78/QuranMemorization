@@ -1,6 +1,6 @@
 import { FONT_SCALE_MAX, FONT_SCALE_MIN, FONT_SCALE_STEP } from '../lib/prefs'
 import { RECITERS } from '../data/reciters'
-import type { DisplayMode, FontId, PhysicalNav } from '../types'
+import type { DisplayMode, FontId, MushafWidth, PhysicalNav } from '../types'
 
 const FONTS: { id: FontId; label: string }[] = [
   { id: 'ibm', label: 'IBM Plex Sans' },
@@ -16,12 +16,14 @@ interface Props {
   font: FontId
   fontScale: number
   physicalNav: PhysicalNav
+  mushafWidth: MushafWidth
   repeats: number
   reciterId: string
   onDisplayModeChange: (mode: DisplayMode) => void
   onFontChange: (font: FontId) => void
   onFontScaleChange: (scale: number) => void
   onPhysicalNavChange: (value: PhysicalNav) => void
+  onMushafWidthChange: (value: MushafWidth) => void
   onRepeatsChange: (n: number) => void
   onReciterChange: (id: string) => void
 }
@@ -33,12 +35,14 @@ export function SettingsModal({
   font,
   fontScale,
   physicalNav,
+  mushafWidth,
   repeats,
   reciterId,
   onDisplayModeChange,
   onFontChange,
   onFontScaleChange,
   onPhysicalNavChange,
+  onMushafWidthChange,
   onRepeatsChange,
   onReciterChange,
 }: Props) {
@@ -141,6 +145,36 @@ export function SettingsModal({
                 Surah
               </button>
             </div>
+          </div>
+
+          <div className="field">
+            <span className="field-label">Mushaf page width</span>
+            <div className="segmented segmented-3">
+              <button
+                type="button"
+                className={mushafWidth === 'auto' ? 'active' : ''}
+                onClick={() => onMushafWidthChange('auto')}
+              >
+                Auto
+              </button>
+              <button
+                type="button"
+                className={mushafWidth === 'a4' ? 'active' : ''}
+                onClick={() => onMushafWidthChange('a4')}
+              >
+                A4 max
+              </button>
+              <button
+                type="button"
+                className={mushafWidth === 'full' ? 'active' : ''}
+                onClick={() => onMushafWidthChange('full')}
+              >
+                Full
+              </button>
+            </div>
+            <p className="field-hint">
+              Auto uses A4 width on landscape and desktop; full width on portrait phone.
+            </p>
           </div>
 
           <div className="field">

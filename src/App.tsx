@@ -7,6 +7,7 @@ import { SettingsModal } from './components/SettingsModal'
 import { getAdjacentSurahId, getAyahs, getSurah } from './data/quran'
 import { usePlayer } from './hooks/usePlayer'
 import { usePwaInstall } from './hooks/usePwaInstall'
+import type { AyahRef } from './lib/ayahSelect'
 import {
   downloadSurah,
   isSurahCached,
@@ -18,6 +19,7 @@ import type {
   DisplayMode,
   DownloadStatus,
   FontId,
+  MushafWidth,
   PhysicalNav,
   RepeatMode,
   ThemeId,
@@ -35,6 +37,7 @@ export default function App() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fsPanelOpen, setFsPanelOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [selectedAyah, setSelectedAyah] = useState<AyahRef | null>(null)
   const [isPortraitMobile, setIsPortraitMobile] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(PORTRAIT_MOBILE_MQ).matches : false,
   )
@@ -43,6 +46,7 @@ export default function App() {
   )
   const abortRef = useRef<AbortController | null>(null)
   const shellRef = useRef<HTMLDivElement | null>(null)
+  const pendingPlayFromRef = useRef<AyahRef | null>(null)
   const pwa = usePwaInstall()
 
   const surah = useMemo(() => getSurah(prefs.surahId), [prefs.surahId])
@@ -94,6 +98,7 @@ export default function App() {
     savePrefs(prefs)
     document.documentElement.dataset.theme = prefs.theme
     document.documentElement.dataset.font = prefs.font
+    document.documentElement.dataset.mushafWidth = prefs.mushafWidth
     document.documentElement.style.setProperty('--font-scale', String(prefs.fontScale))
   }, [prefs])
 
@@ -168,12 +173,60 @@ export default function App() {
     })
   }, [surah])
 
+  const handleSelectAyah = useCallback((ref: AyahRef) => {
+    setSelectedAyah((prev) =>
+      prev?.surahId === ref.surahId && prev?.ayah === ref.ayah ? null : ref,
+    )
+  }, [])
+
+  const playFromSelection = useCallback(
+    (ref: AyahRef) => {
+      if (prefs.mode !== 'page' && ref.surahId !== prefs.surahId) {
+        pendingPlayFromRef.current = ref
+        const versesCount = getSurah(ref.surahId).versesCount
+        const range = clampAyahRange(1, versesCount, versesCount)
+        setPrefs((p) => ({ ...p, surahId: ref.surahId, ...range }))
+        return
+      }
+      player.playFrom(ref.surahId, ref.ayah)
+      setSelectedAyah(null)
+    },
+    [prefs.mode, prefs.surahId, player.playFrom],
+  )
+
+  useEffect(() => {
+    const pending = pendingPlayFromRef.current
+    if (!pending) return
+    if (prefs.surahId !== pending.surahId) return
+    pendingPlayFromRef.current = null
+    player.playFrom(pending.surahId, pending.ayah)
+    setSelectedAyah(null)
+  }, [prefs.surahId, prefs.rangeFrom, prefs.rangeTo, prefs.mode, player.playFrom])
+
+  const handlePlay = useCallback(() => {
+    if (selectedAyah) playFromSelection(selectedAyah)
+    else player.play()
+  }, [playFromSelection, player.play, selectedAyah])
+
+  const handleToggle = useCallback(() => {
+    if (player.isPlaying) {
+      player.pause()
+      return
+    }
+    if (selectedAyah) {
+      playFromSelection(selectedAyah)
+      return
+    }
+    player.toggle()
+  }, [playFromSelection, player.isPlaying, player.pause, player.toggle, selectedAyah])
+
   const update = <K extends keyof AppPrefs>(key: K, value: AppPrefs[K]) => {
     setPrefs((p) => ({ ...p, [key]: value }))
   }
 
   const changeSurah = (id: number) => {
     player.stop()
+    setSelectedAyah(null)
     goToSurah(id)
   }
 
@@ -276,7 +329,7 @@ export default function App() {
         onThemeChange={(theme: ThemeId) => update('theme', theme)}
         onDownload={() => void handleDownload()}
         onRemoveDownload={() => void handleRemove()}
-        onPlay={() => player.play()}
+        onPlay={handlePlay}
         onOpenSettings={() => setSettingsOpen(true)}
         isPlaying={player.isPlaying}
       />
@@ -291,6 +344,9 @@ export default function App() {
           displayMode={prefs.displayMode}
           pageNumber={prefs.pageNumber}
           onPageChange={setPageNumber}
+          selectedSurahId={selectedAyah?.surahId ?? null}
+          selectedAyah={selectedAyah?.ayah ?? null}
+          onSelectAyah={handleSelectAyah}
           chromeInHeader={chromeInHeader}
           headerActions={
             <ReaderChrome
@@ -312,7 +368,7 @@ export default function App() {
           canPrevSurah={prevSurahId != null}
           canNextSurah={nextSurahId != null}
           onPrev={player.prev}
-          onToggle={player.toggle}
+          onToggle={handleToggle}
           onNext={player.next}
           onPrevSurah={() => {
             if (prevSurahId != null) changeSurah(prevSurahId)
@@ -330,12 +386,14 @@ export default function App() {
         font={prefs.font}
         fontScale={prefs.fontScale}
         physicalNav={prefs.physicalNav}
+        mushafWidth={prefs.mushafWidth}
         repeats={prefs.repeats}
         reciterId={prefs.reciterId}
         onDisplayModeChange={(mode: DisplayMode) => update('displayMode', mode)}
         onFontChange={(font: FontId) => update('font', font)}
         onFontScaleChange={(scale) => update('fontScale', scale)}
         onPhysicalNavChange={(value: PhysicalNav) => update('physicalNav', value)}
+        onMushafWidthChange={(value: MushafWidth) => update('mushafWidth', value)}
         onRepeatsChange={(n) => {
           player.stop()
           update('repeats', n)

@@ -10,6 +10,12 @@ export type DisplayMode = 'mushaf' | 'list'
 /** Physical next/prev keys & media buttons target. */
 export type PhysicalNav = 'ayah' | 'surah'
 
+/**
+ * Mushaf page column width.
+ * `auto` = A4 max on landscape / desktop, full width on portrait phone.
+ */
+export type MushafWidth = 'auto' | 'a4' | 'full'
+
 export interface SurahMeta {
   id: number
   nameArabic: string
@@ -47,6 +53,8 @@ export interface AppPrefs {
   fontScale: number
   displayMode: DisplayMode
   physicalNav: PhysicalNav
+  /** Cap mushaf page width (A4-like) or stretch full. */
+  mushafWidth: MushafWidth
 }
 
 export type DownloadStatus = 'idle' | 'downloading' | 'ready' | 'error'

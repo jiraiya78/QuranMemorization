@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { BISMILLAH, isBismillah } from '../data/bismillah'
 import { getAyahs, TRANSLATION_LABEL } from '../data/quran'
 import { getPageForAyah } from '../data/mushaf'
+import { useAyahSelectHandlers, type AyahRef } from '../lib/ayahSelect'
 import type { Ayah, DisplayMode } from '../types'
 import { MushafPage, useMushafPageMeta } from './MushafPage'
 import { MushafPageChrome } from './MushafPageChrome'
@@ -15,8 +16,56 @@ interface Props {
   displayMode: DisplayMode
   pageNumber: number
   onPageChange: (page: number) => void
+  selectedSurahId?: number | null
+  selectedAyah?: number | null
+  onSelectAyah?: (ref: AyahRef) => void
   chromeInHeader?: boolean
   headerActions?: ReactNode
+}
+
+function AyahListItem({
+  ayah,
+  surahId,
+  active,
+  selected,
+  onSelectAyah,
+  setActiveNode,
+}: {
+  ayah: Ayah
+  surahId: number
+  active: boolean
+  selected: boolean
+  onSelectAyah?: (ref: AyahRef) => void
+  setActiveNode?: (node: HTMLElement | null) => void
+}) {
+  const handlers = useAyahSelectHandlers(surahId, ayah.number, onSelectAyah)
+
+  return (
+    <article
+      ref={active ? setActiveNode : undefined}
+      className={`ayah-block${active ? ' active' : ''}${selected ? ' selected' : ''}`}
+      {...handlers}
+    >
+      <div className="ayah-meta">
+        <span
+          className="ayah-number ayah-number-hit"
+          role="button"
+          tabIndex={0}
+          aria-label={`Select ayah ${ayah.number}`}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              onSelectAyah?.({ surahId, ayah: ayah.number })
+            }
+          }}
+        >
+          {ayah.number}
+        </span>
+      </div>
+      <p className="ayah-arabic">{ayah.arabic}</p>
+      <p className="ayah-translation">{ayah.translation}</p>
+    </article>
+  )
 }
 
 export function AyahReader({
@@ -28,6 +77,9 @@ export function AyahReader({
   displayMode,
   pageNumber,
   onPageChange,
+  selectedSurahId = null,
+  selectedAyah = null,
+  onSelectAyah,
   chromeInHeader = false,
   headerActions,
 }: Props) {
@@ -89,6 +141,9 @@ export function AyahReader({
             page={pageNumber}
             activeSurahId={activeSurahId}
             activeAyah={activeAyah}
+            selectedSurahId={selectedSurahId}
+            selectedAyah={selectedAyah}
+            onSelectAyah={onSelectAyah}
             onPageChange={onPageChange}
             hideChrome={chromeInHeader}
           />
@@ -107,18 +162,18 @@ export function AyahReader({
 
             {ayahs.map((ayah) => {
               const active = ayah.number === activeAyah && activeSurahId === surahId
+              const selected =
+                selectedSurahId === surahId && selectedAyah === ayah.number
               return (
-                <article
+                <AyahListItem
                   key={ayah.number}
-                  ref={active ? setActiveNode : undefined}
-                  className={`ayah-block${active ? ' active' : ''}`}
-                >
-                  <div className="ayah-meta">
-                    <span className="ayah-number">{ayah.number}</span>
-                  </div>
-                  <p className="ayah-arabic">{ayah.arabic}</p>
-                  <p className="ayah-translation">{ayah.translation}</p>
-                </article>
+                  ayah={ayah}
+                  surahId={surahId}
+                  active={active}
+                  selected={selected}
+                  onSelectAyah={onSelectAyah}
+                  setActiveNode={active ? setActiveNode : undefined}
+                />
               )
             })}
           </div>

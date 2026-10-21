@@ -12,6 +12,7 @@ import {
 } from '../data/mushaf'
 import { getSurah } from '../data/quran'
 import { toArabicIndic } from '../lib/arabicNumerals'
+import { useAyahSelectHandlers, type AyahRef } from '../lib/ayahSelect'
 import { MushafPageChrome } from './MushafPageChrome'
 
 const LINE_SLOTS = 15
@@ -20,6 +21,9 @@ interface Props {
   page: number
   activeSurahId: number
   activeAyah: number
+  selectedSurahId?: number | null
+  selectedAyah?: number | null
+  onSelectAyah?: (ref: AyahRef) => void
   onPageChange: (page: number) => void
   /** When true, page chrome is rendered by the parent (e.g. fullscreen landscape). */
   hideChrome?: boolean
@@ -28,6 +32,60 @@ interface Props {
 function isActiveSeg(seg: MushafSegment, surahId: number, ayah: number): boolean {
   if (ayah <= 0) return false
   return seg.s === surahId && seg.a === ayah
+}
+
+function MushafAyahSeg({
+  seg,
+  active,
+  selected,
+  onSelectAyah,
+  setActiveNode,
+}: {
+  seg: MushafSegment
+  active: boolean
+  selected: boolean
+  onSelectAyah?: (ref: AyahRef) => void
+  setActiveNode?: (node: HTMLElement | null) => void
+}) {
+  const words = seg.t ? seg.t.split(/\s+/).filter(Boolean) : []
+  /** Handlers go on children — parent uses `display:contents` and is not hit-testable. */
+  const handlers = useAyahSelectHandlers(seg.s, seg.a, onSelectAyah)
+
+  return (
+    <span
+      className={`mushaf-seg${active ? ' active' : ''}${selected ? ' selected' : ''}`}
+      data-ayah={`${seg.s}:${seg.a}`}
+    >
+      {words.map((word, wi) => (
+        <span
+          key={wi}
+          ref={active && wi === 0 ? setActiveNode : undefined}
+          className="mushaf-word"
+          {...handlers}
+        >
+          {word}
+        </span>
+      ))}
+      {seg.e ? (
+        <span
+          ref={active && words.length === 0 ? setActiveNode : undefined}
+          className="mushaf-ayah-mark"
+          role="button"
+          tabIndex={0}
+          aria-label={`Select ayah ${seg.a}`}
+          {...handlers}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              onSelectAyah?.({ surahId: seg.s, ayah: seg.a })
+            }
+          }}
+        >
+          <span className="mushaf-ayah-mark-num">{toArabicIndic(seg.a)}</span>
+        </span>
+      ) : null}
+    </span>
+  )
 }
 
 function SurahBanner({
@@ -91,6 +149,9 @@ export function MushafPage({
   page,
   activeSurahId,
   activeAyah,
+  selectedSurahId = null,
+  selectedAyah = null,
+  onSelectAyah,
   onPageChange,
   hideChrome = false,
 }: Props) {
@@ -121,15 +182,9 @@ export function MushafPage({
         old.remove()
       }
 
-      for (const line of root.querySelectorAll<HTMLElement>(
-        '.mushaf-line:not(.is-empty):not(.is-ornament)',
-      )) {
-        const pieces = [
-          ...line.querySelectorAll<HTMLElement>(
-            '.mushaf-seg.active .mushaf-word, .mushaf-seg.active .mushaf-ayah-mark',
-          ),
-        ]
-        if (pieces.length === 0) continue
+      const paintBand = (line: HTMLElement, selector: string, className: string) => {
+        const pieces = [...line.querySelectorAll<HTMLElement>(selector)]
+        if (pieces.length === 0) return
 
         const lineRect = line.getBoundingClientRect()
         let minL = Infinity
@@ -139,18 +194,33 @@ export function MushafPage({
           minL = Math.min(minL, r.left)
           maxR = Math.max(maxR, r.right)
         }
-        if (!Number.isFinite(minL) || maxR <= minL) continue
+        if (!Number.isFinite(minL) || maxR <= minL) return
 
         const pad = Math.max(6, Number.parseFloat(getComputedStyle(line).fontSize) * 0.22)
         const left = Math.max(0, minL - lineRect.left - pad)
         const right = Math.min(lineRect.width, maxR - lineRect.left + pad)
 
         const band = document.createElement('div')
-        band.className = 'mushaf-line-highlight'
+        band.className = className
         band.setAttribute('aria-hidden', 'true')
         band.style.left = `${left}px`
         band.style.width = `${Math.max(0, right - left)}px`
         line.insertBefore(band, line.firstChild)
+      }
+
+      for (const line of root.querySelectorAll<HTMLElement>(
+        '.mushaf-line:not(.is-empty):not(.is-ornament)',
+      )) {
+        paintBand(
+          line,
+          '.mushaf-seg.selected .mushaf-word, .mushaf-seg.selected .mushaf-ayah-mark',
+          'mushaf-line-highlight is-selected',
+        )
+        paintBand(
+          line,
+          '.mushaf-seg.active .mushaf-word, .mushaf-seg.active .mushaf-ayah-mark',
+          'mushaf-line-highlight',
+        )
       }
     }
 
@@ -199,7 +269,7 @@ export function MushafPage({
     const ro = new ResizeObserver(fit)
     ro.observe(root)
     return () => ro.disconnect()
-  }, [page, pageData, decorations, activeSurahId, activeAyah])
+  }, [page, pageData, decorations, activeSurahId, activeAyah, selectedSurahId, selectedAyah])
 
   useEffect(() => {
     const root = linesRootRef.current
@@ -268,46 +338,26 @@ export function MushafPage({
                   >
                     {segs.map((seg, idx) => {
                       const active = isActiveSeg(seg, activeSurahId, activeAyah)
-                      const words = seg.t ? seg.t.split(/\s+/).filter(Boolean) : []
+                      const selected =
+                        selectedSurahId != null &&
+                        selectedAyah != null &&
+                        seg.s === selectedSurahId &&
+                        seg.a === selectedAyah
                       return (
-                        <span
+                        <MushafAyahSeg
                           key={`${seg.s}:${seg.a}:${idx}`}
-                          className={`mushaf-seg${active ? ' active' : ''}`}
-                          data-ayah={`${seg.s}:${seg.a}`}
-                        >
-                          {words.map((word, wi) => (
-                            <span
-                              key={wi}
-                              ref={
-                                active && wi === 0
-                                  ? (node) => {
-                                      activeRef.current = node
-                                    }
-                                  : undefined
-                              }
-                              className="mushaf-word"
-                            >
-                              {word}
-                            </span>
-                          ))}
-                          {seg.e ? (
-                            <span
-                              ref={
-                                active && words.length === 0
-                                  ? (node) => {
-                                      activeRef.current = node
-                                    }
-                                  : undefined
-                              }
-                              className="mushaf-ayah-mark"
-                              aria-label={`Ayah ${seg.a}`}
-                            >
-                              <span className="mushaf-ayah-mark-num">
-                                {toArabicIndic(seg.a)}
-                              </span>
-                            </span>
-                          ) : null}
-                        </span>
+                          seg={seg}
+                          active={active}
+                          selected={selected}
+                          onSelectAyah={onSelectAyah}
+                          setActiveNode={
+                            active
+                              ? (node) => {
+                                  activeRef.current = node
+                                }
+                              : undefined
+                          }
+                        />
                       )
                     })}
                   </div>
