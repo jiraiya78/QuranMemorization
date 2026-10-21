@@ -16,6 +16,9 @@
   --select-bg: #1a3329;
   --select-text: #f5efe3;
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --banner-green: #1e3d30;
+  --banner-green-light: #2f5a45;
+  --mushaf-page-bg: linear-gradient(165deg, #1a3329 0%, #12241c 100%);
   color-scheme: dark;
 }
 
@@ -34,57 +37,99 @@
   --select-bg: #1a2240;
   --select-text: #eef0f7;
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  --banner-green: #1a2240;
+  --banner-green-light: #2a3860;
+  --mushaf-page-bg: linear-gradient(165deg, #1a2240 0%, #12182e 100%);
   color-scheme: dark;
 }
 
 [data-theme='mushaf'] {
   --bg: #e8dcc8;
-  --bg-panel: #2f4a3c;
-  --bg-reader: linear-gradient(180deg, #f3ebe0 0%, #e8dcc8 100%);
-  --text: #2a2118;
-  --text-muted: rgba(42, 33, 24, 0.72);
-  --accent: #d2b56b;
-  --accent-soft: rgba(47, 74, 60, 0.12);
-  --accent-text: #1e2e26;
-  --border: rgba(47, 74, 60, 0.25);
-  --ayah-active-bg: rgba(47, 74, 60, 0.12);
-  --control: rgba(47, 74, 60, 0.12);
-  --select-bg: #24382e;
-  --select-text: #f3ebe0;
-  --shadow: 0 12px 36px rgba(42, 33, 24, 0.12);
-  color-scheme: dark;
+  --bg-panel: #f4efe4;
+  --bg-reader: linear-gradient(180deg, #f7f1e6 0%, #e8dcc8 100%);
+  --text: #1f2e26;
+  --text-muted: rgba(31, 46, 38, 0.72);
+  --accent: #3d6b52;
+  --accent-soft: rgba(61, 107, 82, 0.14);
+  --accent-text: #f4efe4;
+  --border: rgba(47, 74, 60, 0.38);
+  --ayah-active-bg: rgba(61, 107, 82, 0.16);
+  --control: rgba(47, 74, 60, 0.1);
+  --select-bg: #ffffff;
+  --select-text: #1f2e26;
+  --shadow: 0 12px 36px rgba(42, 33, 24, 0.1);
+  --dock-bg: #efe6d6;
+  --banner-green: #2f4a3c;
+  --banner-green-light: #4a6f5c;
+  --mushaf-page-bg: linear-gradient(165deg, #fffdf7 0%, #f7f0e0 100%);
+  color-scheme: light;
 }
 
 [data-theme='mushaf'] .setup-panel {
-  color: #f3ebe0;
+  color: var(--text);
+  background: var(--bg-panel);
+  border-color: var(--border);
 }
 
 [data-theme='mushaf'] .setup-panel .field-label,
 [data-theme='mushaf'] .setup-panel .brand-sub,
 [data-theme='mushaf'] .setup-panel .setup-summary {
-  color: rgba(243, 235, 224, 0.7);
+  color: var(--text-muted);
 }
 
 [data-theme='mushaf'] .setup-panel .collapse-toggle {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f3ebe0;
-  border-color: rgba(210, 181, 107, 0.35);
+  background: var(--control);
+  color: var(--text);
+  border-color: var(--border);
 }
 
 [data-theme='mushaf'] .setup-panel .segmented button,
 [data-theme='mushaf'] .setup-panel .stepper button {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f3ebe0;
-  border-color: rgba(210, 181, 107, 0.35);
+  background: #fff;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+[data-theme='mushaf'] .setup-panel .segmented button.active,
+[data-theme='mushaf'] .setup-panel .stepper button:active {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
 }
 
 [data-theme='mushaf'] .setup-panel select {
-  border-color: rgba(210, 181, 107, 0.35);
+  border-color: var(--border);
+  background: var(--select-bg);
+  color: var(--select-text);
 }
 
 [data-theme='mushaf'] .setup-panel .brand {
-  color: #d2b56b;
+  color: var(--accent);
 }
+
+[data-theme='mushaf'] .player-dock {
+  background: var(--dock-bg);
+  border-top-color: var(--border);
+  color: var(--text);
+}
+
+[data-theme='mushaf'] .player-dock .dock-stat {
+  color: var(--text);
+}
+
+[data-theme='mushaf'] .ctrl {
+  background: var(--dock-bg);
+  border-color: var(--border);
+  color: var(--text);
+  border-radius: 10px;
+}
+
+[data-theme='mushaf'] .ctrl.ctrl-main {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
 
 /* Quranic marks need capable fallbacks — IBM alone is missing some Uthmani glyphs */
 [data-font='ibm'] {
@@ -305,6 +350,10 @@ select {
   grid-template-columns: 1fr 1fr 1fr;
 }
 
+.segmented-2x2 {
+  grid-template-columns: 1fr 1fr;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -322,6 +371,19 @@ select {
   border-radius: 10px;
   padding: 0.55rem 0.4rem;
   cursor: pointer;
+}
+
+.segmented button:active:not(:disabled),
+.stepper button:active:not(:disabled),
+.btn:active:not(:disabled),
+.ctrl:active:not(:disabled),
+.mushaf-page-nav:active:not(:disabled),
+.chrome-btn:active:not(:disabled),
+.theme-swatch:active {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  filter: brightness(1.12);
+  transform: scale(0.97);
 }
 
 .segmented button.active {
@@ -470,6 +532,17 @@ select {
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--text);
+}
+
+.chrome-btn-gear {
+  width: 2.5rem;
+  min-width: 2.5rem;
+  padding: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ayah-list {
@@ -623,12 +696,8 @@ select {
   padding: 0.85rem 0.85rem 0.65rem;
   border: 2px solid color-mix(in srgb, var(--accent) 55%, var(--border));
   border-radius: 6px;
-  background:
-    linear-gradient(
-      165deg,
-      color-mix(in srgb, var(--bg-panel) 88%, #f5efe0) 0%,
-      color-mix(in srgb, var(--bg-panel) 92%, #e8dcc4) 100%
-    );
+  background: var(--mushaf-page-bg);
+  color: var(--text);
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent),
     var(--shadow);
@@ -637,7 +706,6 @@ select {
 }
 
 [data-theme='mushaf'] .mushaf-sheet-frame {
-  background: linear-gradient(165deg, #fffdf7 0%, #f7f0e0 100%);
   border-color: rgba(47, 74, 60, 0.45);
 }
 
@@ -645,34 +713,35 @@ select {
 .mushaf-sheet.is-baqarah .mushaf-sheet-frame,
 .mushaf-sheet.is-midquran .mushaf-sheet-frame {
   border-width: 3px;
-  border-color: color-mix(in srgb, var(--accent) 70%, #b0893f);
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
   background:
-    radial-gradient(ellipse at 50% 6%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 40%),
-    linear-gradient(165deg, #fffdf8 0%, #f3ead6 100%);
+    radial-gradient(ellipse at 50% 6%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 40%),
+    var(--mushaf-page-bg);
 }
 
 .mushaf-lines {
   /* Same scale as ayah-list; row height = size × line-height */
   --mushaf-size: calc(clamp(1.75rem, 3.6vw, 2.45rem) * var(--font-scale, 1));
-  --mushaf-line-height: 2.05;
+  --mushaf-line-height: 2.35;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0.12em;
   font-size: var(--mushaf-size);
 }
 
 .mushaf-line {
+  position: relative;
   display: flex;
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.28em;
+  gap: 0.35em;
   box-sizing: border-box;
   width: 100%;
   min-height: calc(1em * var(--mushaf-line-height));
   height: calc(1em * var(--mushaf-line-height));
-  padding: 0;
+  padding: 0.08em 0;
   direction: rtl;
   font-family: var(--arabic-font);
   font-size: 1em;
@@ -680,6 +749,16 @@ select {
   line-height: var(--mushaf-line-height);
   color: var(--text);
   white-space: nowrap;
+}
+
+.mushaf-line-highlight {
+  position: absolute;
+  top: 0.15em;
+  bottom: 0.15em;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 0.3em;
+  background: var(--ayah-active-bg);
 }
 
 .mushaf-line.is-short {
@@ -720,108 +799,106 @@ select {
   color: var(--accent);
 }
 
+/* Flat modern geometric surah header (inspired by mushaf cartouche) */
 .mushaf-surah-banner {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
+  justify-content: space-between;
+  gap: 0.55rem;
   width: 100%;
   box-sizing: border-box;
-  padding: 0.4rem 0.55rem;
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--control) 70%, var(--accent-soft)) 0%,
-      color-mix(in srgb, var(--accent-soft) 55%, transparent) 100%
-    );
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
-    inset 0 0 0 3px color-mix(in srgb, var(--control) 40%, transparent);
+  padding: 0.35rem 0.55rem;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--banner-green);
+  box-shadow: none;
 }
 
-.mushaf-banner-wing {
-  flex: 1 1 auto;
-  min-width: 1.5rem;
-  height: 0.5rem;
-  border-radius: 2px;
+.mushaf-banner-pattern {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
   background:
     repeating-linear-gradient(
-      90deg,
-      var(--accent) 0 0.2rem,
-      transparent 0.2rem 0.38rem
+      45deg,
+      transparent 0 8px,
+      color-mix(in srgb, var(--banner-green-light) 80%, white) 8px 9px
     ),
-    linear-gradient(
-      90deg,
-      transparent,
-      color-mix(in srgb, var(--accent) 55%, transparent) 14%,
-      color-mix(in srgb, var(--accent) 55%, transparent) 86%,
-      transparent
-    );
-  opacity: 0.75;
-  position: relative;
-}
-
-.mushaf-banner-wing::before,
-.mushaf-banner-wing::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  width: 0.5rem;
-  height: 0.5rem;
-  border: 1.5px solid var(--accent);
-  transform: translateY(-50%) rotate(45deg);
-  background: color-mix(in srgb, var(--accent-soft) 80%, var(--accent));
-}
-
-.mushaf-banner-wing::before {
-  left: 0;
-}
-
-.mushaf-banner-wing::after {
-  right: 0;
-}
-
-.mushaf-banner-gem {
-  width: 0.9rem;
-  height: 0.9rem;
-  flex-shrink: 0;
-  border-radius: 50%;
-  border: 1.5px solid var(--accent);
-  background:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0 8px,
+      color-mix(in srgb, var(--accent) 45%, transparent) 8px 9px
+    ),
     radial-gradient(
-      circle at 50% 50%,
-      color-mix(in srgb, var(--text) 35%, var(--accent)) 16%,
-      transparent 18%
-    ),
-    conic-gradient(
-      from 45deg,
-      var(--accent),
-      transparent 25%,
-      var(--accent) 50%,
-      transparent 75%,
-      var(--accent)
+      circle at 20% 50%,
+      color-mix(in srgb, var(--accent) 35%, transparent) 0 1.5px,
+      transparent 2px
     );
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-soft) 70%, transparent);
+  background-size: auto, auto, 14px 14px;
 }
 
-.mushaf-banner-core {
+.mushaf-banner-medallion {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.1rem;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
   flex-shrink: 0;
-  padding: 0 0.35rem;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+  background: var(--banner-green-light);
+  color: #f5efe3;
+}
+
+.mushaf-banner-medallion-num {
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mushaf-banner-medallion-cap {
+  font-size: 0.55rem;
+  line-height: 1;
+  margin-top: 0.12rem;
+  opacity: 0.9;
+}
+
+.mushaf-banner-cartouche {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  min-width: 0;
+  padding: 0.35rem 1rem;
+  background: #fffef8;
+  color: #1a1a1a;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 55%, #888);
+  clip-path: polygon(
+    0.55rem 0%,
+    calc(100% - 0.55rem) 0%,
+    100% 50%,
+    calc(100% - 0.55rem) 100%,
+    0.55rem 100%,
+    0% 50%
+  );
 }
 
 .mushaf-ornament-title {
-  font-size: 0.72em;
+  font-size: 0.78em;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   white-space: nowrap;
-  padding: 0 0.35rem;
-  color: var(--accent);
+  color: #1a1a1a;
 }
 
 .mushaf-ornament-basmala {
@@ -829,7 +906,7 @@ select {
   font-weight: 700;
   color: var(--text);
   white-space: nowrap;
-  line-height: var(--mushaf-line-height, 2.05);
+  line-height: var(--mushaf-line-height, 2.35);
 }
 
 .mushaf-line-ornament.with-basmala .mushaf-ornament-basmala {
@@ -837,36 +914,33 @@ select {
 }
 
 .mushaf-mid-label {
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
-  opacity: 0.88;
+  font-size: 0.55em;
+  letter-spacing: 0.12em;
   font-weight: 600;
-  color: var(--text-muted);
+  color: #5a4a32;
 }
 
 .mushaf-sheet.is-fatihah .mushaf-ornament-title {
-  font-size: 0.8em;
+  font-size: 0.88em;
 }
 
 .mushaf-line-ornament.is-basmala {
   font-size: 1em;
 }
 
+/* Words stay separate flex items for justify; highlight is a single band behind them. */
 .mushaf-seg {
   display: contents;
 }
 
-.mushaf-word {
-  white-space: nowrap;
-  border-radius: 3px;
-  padding: 0.05em 0.02em;
-  transition: background 0.25s ease, box-shadow 0.25s ease;
+.mushaf-word,
+.mushaf-ayah-mark {
+  position: relative;
+  z-index: 1;
 }
 
-.mushaf-seg.active .mushaf-word,
-.mushaf-seg.active .mushaf-ayah-mark {
-  background: var(--ayah-active-bg);
-  box-shadow: inset 0 -2px 0 var(--accent);
+.mushaf-word {
+  white-space: nowrap;
 }
 
 .mushaf-ayah-mark {
@@ -874,9 +948,9 @@ select {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: 1.65em;
-  height: 1.65em;
-  margin-inline: 0.14em 0.2em;
+  width: 1.85em;
+  height: 1.85em;
+  margin-inline: 0.1em 0.15em;
   vertical-align: middle;
   border: 2px solid var(--accent);
   border-radius: 50%;
@@ -888,7 +962,7 @@ select {
 
 .mushaf-ayah-mark-num {
   display: block;
-  font-size: 0.58em;
+  font-size: 0.68em;
   font-weight: 700;
   line-height: 1;
   text-align: center;
@@ -935,13 +1009,25 @@ select {
   background: rgba(255, 252, 245, 0.96);
 }
 
+.floating-translation-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.3rem;
+}
+
 .floating-translation-label {
-  display: block;
   font-size: 0.68rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent);
-  margin-bottom: 0.3rem;
+}
+
+.floating-translation-credit {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-align: right;
 }
 
 .floating-translation p {
@@ -1274,7 +1360,42 @@ select {
   .mushaf-lines {
     /* Keep ayah-list scale; fit script only shrinks if a line overflows */
     --mushaf-size: calc(clamp(1.75rem, 3.8vh, 2.45rem) * var(--font-scale, 1));
-    --mushaf-line-height: 2.05;
+    --mushaf-line-height: 2.35;
+  }
+
+  .ayah-reader.chrome-in-header .reader-header {
+    margin-bottom: 0.45rem;
+  }
+
+  .ayah-reader.chrome-in-header .reader-header-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ayah-reader.chrome-in-header .reader-header-main h1 {
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .ayah-reader.chrome-in-header .mushaf-page-chrome {
+    margin: 0;
+  }
+
+  .mushaf-page-chrome.is-compact {
+    gap: 0.4rem;
+  }
+
+  .mushaf-page-chrome.is-compact .mushaf-page-nav {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .mushaf-page-chrome.is-compact .mushaf-page-number {
+    font-size: 1.05rem;
+  }
+
+  .mushaf-page-chrome.is-compact .mushaf-page-limits {
+    font-size: 0.68rem;
   }
 
   .mushaf-surah-banner {
@@ -1347,8 +1468,76 @@ select {
   }
 }
 
+.settings-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+
+.settings-modal {
+  width: min(100%, 26rem);
+  max-height: min(90vh, 40rem);
+  overflow: auto;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.settings-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-modal-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.settings-close {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--control);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.settings-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+[data-theme='mushaf'] .setup-panel select {
+  color-scheme: light;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ayah-block {
     transition: none;
+  }
+
+  .segmented button:active:not(:disabled),
+  .stepper button:active:not(:disabled),
+  .btn:active:not(:disabled),
+  .ctrl:active:not(:disabled),
+  .mushaf-page-nav:active:not(:disabled),
+  .chrome-btn:active:not(:disabled),
+  .theme-swatch:active {
+    transform: none;
   }
 }

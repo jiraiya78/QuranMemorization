@@ -113,6 +113,23 @@ export function getPageSurahNames(page: number): string {
     .join(' · ')
 }
 
+/** Ordered unique ayahs on a Madani page (for page-repeat playlist). */
+export function getAyahsOnPage(page: number): { surahId: number; ayah: number }[] {
+  const p = getMushafPage(page)
+  if (!p) return []
+  const out: { surahId: number; ayah: number }[] = []
+  const seen = new Set<string>()
+  for (const line of p.lines) {
+    for (const seg of line.segs) {
+      const key = `${seg.s}:${seg.a}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ surahId: seg.s, ayah: seg.a })
+    }
+  }
+  return out
+}
+
 export function surahBannerLabel(surahId: number): string {
   const s = getSurah(surahId)
   return `سُورَةُ ${s.nameArabic}`

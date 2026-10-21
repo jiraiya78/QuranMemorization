@@ -1,25 +1,34 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { BISMILLAH, isBismillah } from '../data/bismillah'
-import { TRANSLATION_LABEL } from '../data/quran'
+import { getAyahs, TRANSLATION_LABEL } from '../data/quran'
 import { getPageForAyah } from '../data/mushaf'
 import type { Ayah, DisplayMode } from '../types'
-import { MushafPage } from './MushafPage'
+import { MushafPage, useMushafPageMeta } from './MushafPage'
+import { MushafPageChrome } from './MushafPageChrome'
 
 interface Props {
   ayahs: Ayah[]
   activeAyah: number
+  activeSurahId: number
   surahId: number
   surahName: string
   displayMode: DisplayMode
+  pageNumber: number
+  onPageChange: (page: number) => void
+  chromeInHeader?: boolean
   headerActions?: ReactNode
 }
 
 export function AyahReader({
   ayahs,
   activeAyah,
+  activeSurahId,
   surahId,
   surahName,
   displayMode,
+  pageNumber,
+  onPageChange,
+  chromeInHeader = false,
   headerActions,
 }: Props) {
   const activeRef = useRef<HTMLElement | null>(null)
@@ -28,14 +37,15 @@ export function AyahReader({
   }
 
   const playbackPage = useMemo(
-    () => getPageForAyah(surahId, activeAyah),
-    [surahId, activeAyah],
+    () => getPageForAyah(activeSurahId, activeAyah),
+    [activeSurahId, activeAyah],
   )
-  const [viewPage, setViewPage] = useState(playbackPage)
 
+  /** Follow the recited ayah onto its Madani page — do not fight manual page buttons. */
   useEffect(() => {
-    setViewPage(playbackPage)
-  }, [playbackPage])
+    if (displayMode !== 'mushaf') return
+    onPageChange(playbackPage)
+  }, [playbackPage, displayMode, onPageChange])
 
   useEffect(() => {
     if (displayMode !== 'list') return
@@ -44,20 +54,30 @@ export function AyahReader({
 
   const activeTranslation = useMemo(() => {
     if (isBismillah(activeAyah)) return BISMILLAH.translation
-    return ayahs.find((a) => a.number === activeAyah)?.translation ?? ''
-  }, [activeAyah, ayahs])
+    const list = activeSurahId === surahId ? ayahs : getAyahs(activeSurahId)
+    return list.find((a) => a.number === activeAyah)?.translation ?? ''
+  }, [activeAyah, activeSurahId, ayahs, surahId])
 
+  const pageMeta = useMushafPageMeta(pageNumber)
   const showFloating = displayMode === 'mushaf'
 
   return (
     <div
-      className={`ayah-reader mode-${displayMode}${showFloating ? ' has-floating-translation' : ''}`}
+      className={`ayah-reader mode-${displayMode}${showFloating ? ' has-floating-translation' : ''}${chromeInHeader ? ' chrome-in-header' : ''}`}
     >
       <header className="reader-header">
         <div className="reader-header-row">
-          <div>
+          <div className="reader-header-main">
             <h1>{surahName}</h1>
-            <p className="translation-credit">{TRANSLATION_LABEL}</p>
+            {chromeInHeader && displayMode === 'mushaf' ? (
+              <MushafPageChrome
+                page={pageNumber}
+                rangeLabel={pageMeta.rangeLabel}
+                surahNames={pageMeta.surahNames}
+                onPageChange={onPageChange}
+                compact
+              />
+            ) : null}
           </div>
           {headerActions}
         </div>
@@ -66,10 +86,11 @@ export function AyahReader({
       <div className="ayah-scroll">
         {displayMode === 'mushaf' ? (
           <MushafPage
-            page={viewPage}
-            activeSurahId={surahId}
+            page={pageNumber}
+            activeSurahId={activeSurahId}
             activeAyah={activeAyah}
-            onPageChange={setViewPage}
+            onPageChange={onPageChange}
+            hideChrome={chromeInHeader}
           />
         ) : (
           <div className="ayah-list">
@@ -85,7 +106,7 @@ export function AyahReader({
             </article>
 
             {ayahs.map((ayah) => {
-              const active = ayah.number === activeAyah
+              const active = ayah.number === activeAyah && activeSurahId === surahId
               return (
                 <article
                   key={ayah.number}
@@ -106,7 +127,10 @@ export function AyahReader({
 
       {showFloating && activeTranslation ? (
         <aside className="floating-translation" dir="ltr" aria-live="polite">
-          <span className="floating-translation-label">Translation</span>
+          <div className="floating-translation-head">
+            <span className="floating-translation-label">Translation</span>
+            <span className="floating-translation-credit">{TRANSLATION_LABEL}</span>
+          </div>
           <p>{activeTranslation}</p>
         </aside>
       ) : null}

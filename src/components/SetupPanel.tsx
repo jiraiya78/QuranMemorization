@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react'
-import { RECITERS } from '../data/reciters'
 import { filterSurahsByJuz, JUZ_COUNT, SURAH_LIST } from '../data/quran'
-import { FONT_SCALE_MAX, FONT_SCALE_MIN, FONT_SCALE_STEP } from '../lib/prefs'
-import type { DisplayMode, DownloadStatus, FontId, RepeatMode, ThemeId } from '../types'
+import type { DownloadStatus, RepeatMode, ThemeId } from '../types'
 
 const THEMES: { id: ThemeId; label: string }[] = [
   { id: 'emerald', label: 'Emerald' },
@@ -10,80 +8,62 @@ const THEMES: { id: ThemeId; label: string }[] = [
   { id: 'mushaf', label: 'Mushaf' },
 ]
 
-const FONTS: { id: FontId; label: string }[] = [
-  { id: 'ibm', label: 'IBM Plex Sans' },
-  { id: 'amiri', label: 'Amiri' },
-  { id: 'noto', label: 'Noto Naskh' },
-  { id: 'scheherazade', label: 'Scheherazade' },
-]
-
 interface Props {
   surahId: number
   mode: RepeatMode
-  repeats: number
   rangeFrom: number
   rangeTo: number
   versesCount: number
-  reciterId: string
   theme: ThemeId
-  font: FontId
-  fontScale: number
-  displayMode: DisplayMode
   downloadStatus: DownloadStatus
   downloadProgress: string
   collapsed: boolean
   onToggleCollapsed: () => void
   onSurahChange: (id: number) => void
   onModeChange: (mode: RepeatMode) => void
-  onRepeatsChange: (n: number) => void
   onRangeFromChange: (n: number) => void
   onRangeToChange: (n: number) => void
-  onReciterChange: (id: string) => void
   onThemeChange: (theme: ThemeId) => void
-  onFontChange: (font: FontId) => void
-  onFontScaleChange: (scale: number) => void
-  onDisplayModeChange: (mode: DisplayMode) => void
   onDownload: () => void
   onRemoveDownload: () => void
   onPlay: () => void
+  onOpenSettings: () => void
   isPlaying: boolean
 }
 
 export function SetupPanel({
   surahId,
   mode,
-  repeats,
   rangeFrom,
   rangeTo,
   versesCount,
-  reciterId,
   theme,
-  font,
-  fontScale,
-  displayMode,
   downloadStatus,
   downloadProgress,
   collapsed,
   onToggleCollapsed,
   onSurahChange,
   onModeChange,
-  onRepeatsChange,
   onRangeFromChange,
   onRangeToChange,
-  onReciterChange,
   onThemeChange,
-  onFontChange,
-  onFontScaleChange,
-  onDisplayModeChange,
   onDownload,
   onRemoveDownload,
   onPlay,
+  onOpenSettings,
   isPlaying,
 }: Props) {
   const [juzFilter, setJuzFilter] = useState<number | 'all'>('all')
   const surah = SURAH_LIST.find((s) => s.id === surahId)
-  const modeLabel = mode === 'ayah' ? 'Ayah' : mode === 'range' ? `${rangeFrom}–${rangeTo}` : 'Surah'
-  const summary = `${surah?.nameSimple ?? 'Surah'} · ${modeLabel} ×${repeats}`
+  const modeLabel =
+    mode === 'ayah'
+      ? 'Ayah'
+      : mode === 'range'
+        ? `${rangeFrom}–${rangeTo}`
+        : mode === 'page'
+          ? 'Page'
+          : 'Surah'
+  const summary = `${surah?.nameSimple ?? 'Surah'} · ${modeLabel}`
   const ayahOptions = Array.from({ length: versesCount }, (_, i) => i + 1)
   const visibleSurahs = useMemo(() => filterSurahsByJuz(juzFilter), [juzFilter])
 
@@ -145,68 +125,6 @@ export function SetupPanel({
           </div>
         </label>
 
-        <div className="field">
-          <span className="field-label">Ayah layout</span>
-          <div className="segmented">
-            <button
-              type="button"
-              className={displayMode === 'mushaf' ? 'active' : ''}
-              onClick={() => onDisplayModeChange('mushaf')}
-            >
-              Mushaf page
-            </button>
-            <button
-              type="button"
-              className={displayMode === 'list' ? 'active' : ''}
-              onClick={() => onDisplayModeChange('list')}
-            >
-              Ayah list
-            </button>
-          </div>
-        </div>
-
-        <label className="field">
-          <span className="field-label">Arabic font</span>
-          <select value={font} onChange={(e) => onFontChange(e.target.value as FontId)}>
-            {FONTS.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="field">
-          <span className="field-label">Text size</span>
-          <div className="stepper">
-            <button
-              type="button"
-              aria-label="Decrease text size"
-              disabled={fontScale <= FONT_SCALE_MIN}
-              onClick={() =>
-                onFontScaleChange(
-                  Math.max(FONT_SCALE_MIN, Number((fontScale - FONT_SCALE_STEP).toFixed(1))),
-                )
-              }
-            >
-              A−
-            </button>
-            <span className="stepper-value stepper-value-sm">{Math.round(fontScale * 100)}%</span>
-            <button
-              type="button"
-              aria-label="Increase text size"
-              disabled={fontScale >= FONT_SCALE_MAX}
-              onClick={() =>
-                onFontScaleChange(
-                  Math.min(FONT_SCALE_MAX, Number((fontScale + FONT_SCALE_STEP).toFixed(1))),
-                )
-              }
-            >
-              A+
-            </button>
-          </div>
-        </div>
-
         <label className="field">
           <span className="field-label">Juz</span>
           <select
@@ -235,7 +153,7 @@ export function SetupPanel({
 
         <div className="field">
           <span className="field-label">Mode</span>
-          <div className="segmented segmented-3">
+          <div className="segmented segmented-2x2">
             <button
               type="button"
               className={mode === 'surah' ? 'active' : ''}
@@ -256,6 +174,13 @@ export function SetupPanel({
               onClick={() => onModeChange('range')}
             >
               A → B
+            </button>
+            <button
+              type="button"
+              className={mode === 'page' ? 'active' : ''}
+              onClick={() => onModeChange('page')}
+            >
+              Repeat Page
             </button>
           </div>
         </div>
@@ -285,39 +210,10 @@ export function SetupPanel({
           </div>
         ) : null}
 
-        <div className="field">
-          <span className="field-label">Repeats</span>
-          <div className="stepper">
-            <button
-              type="button"
-              aria-label="Decrease repeats"
-              onClick={() => onRepeatsChange(Math.max(1, repeats - 1))}
-            >
-              −
-            </button>
-            <span className="stepper-value">{repeats}</span>
-            <button
-              type="button"
-              aria-label="Increase repeats"
-              onClick={() => onRepeatsChange(Math.min(99, repeats + 1))}
-            >
-              +
-            </button>
-          </div>
-        </div>
-
-        <label className="field">
-          <span className="field-label">Reciter</span>
-          <select value={reciterId} onChange={(e) => onReciterChange(e.target.value)}>
-            {RECITERS.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
         <div className="setup-actions">
+          <button type="button" className="btn btn-ghost" onClick={onOpenSettings}>
+            ⚙ Settings
+          </button>
           {downloadStatus === 'ready' ? (
             <button type="button" className="btn btn-ghost" onClick={onRemoveDownload}>
               Offline ready · Remove

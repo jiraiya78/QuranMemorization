@@ -20,11 +20,13 @@ export function ReaderChrome({
       {isFullscreen ? (
         <button
           type="button"
-          className="chrome-btn"
+          className="chrome-btn chrome-btn-gear"
+          aria-label={panelOpenInFullscreen ? 'Hide settings panel' : 'Open settings panel'}
           aria-pressed={panelOpenInFullscreen}
+          title={panelOpenInFullscreen ? 'Hide settings' : 'Settings'}
           onClick={onTogglePanel}
         >
-          {panelOpenInFullscreen ? 'Hide panel' : 'Settings panel'}
+          <span aria-hidden="true">⚙</span>
         </button>
       ) : null}
       <button

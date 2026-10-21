@@ -1,4 +1,4 @@
-export type RepeatMode = 'surah' | 'ayah' | 'range'
+export type RepeatMode = 'surah' | 'ayah' | 'range' | 'page'
 
 export type ThemeId = 'emerald' | 'indigo' | 'mushaf'
 
@@ -6,6 +6,9 @@ export type FontId = 'ibm' | 'amiri' | 'noto' | 'scheherazade'
 
 /** mushaf = continuous Rasm Uthmani page; list = one ayah per block */
 export type DisplayMode = 'mushaf' | 'list'
+
+/** Physical next/prev keys & media buttons target. */
+export type PhysicalNav = 'ayah' | 'surah'
 
 export interface SurahMeta {
   id: number
@@ -35,12 +38,15 @@ export interface AppPrefs {
   rangeFrom: number
   /** Inclusive end ayah when mode is `range`. */
   rangeTo: number
+  /** Madani page when mode is `page`. */
+  pageNumber: number
   reciterId: string
   theme: ThemeId
   font: FontId
   /** Multiplier for Arabic / translation size (0.8–1.8). */
   fontScale: number
   displayMode: DisplayMode
+  physicalNav: PhysicalNav
 }
 
 export type DownloadStatus = 'idle' | 'downloading' | 'ready' | 'error'

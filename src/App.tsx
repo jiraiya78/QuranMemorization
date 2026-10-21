@@ -3,6 +3,7 @@ import { SetupPanel } from './components/SetupPanel'
 import { AyahReader } from './components/AyahReader'
 import { PlayerDock } from './components/PlayerDock'
 import { ReaderChrome } from './components/ReaderChrome'
+import { SettingsModal } from './components/SettingsModal'
 import { getAdjacentSurahId, getAyahs, getSurah } from './data/quran'
 import { usePlayer } from './hooks/usePlayer'
 import { usePwaInstall } from './hooks/usePwaInstall'
@@ -17,11 +18,13 @@ import type {
   DisplayMode,
   DownloadStatus,
   FontId,
+  PhysicalNav,
   RepeatMode,
   ThemeId,
 } from './types'
 
 const PORTRAIT_MOBILE_MQ = '(max-width: 900px) and (orientation: portrait)'
+const FS_LANDSCAPE_MQ = '(orientation: landscape)'
 
 export default function App() {
   const [prefs, setPrefs] = useState<AppPrefs>(() => loadPrefs())
@@ -31,8 +34,12 @@ export default function App() {
   const [panelCollapsed, setPanelCollapsed] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [fsPanelOpen, setFsPanelOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [isPortraitMobile, setIsPortraitMobile] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(PORTRAIT_MOBILE_MQ).matches : false,
+  )
+  const [isLandscape, setIsLandscape] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(FS_LANDSCAPE_MQ).matches : false,
   )
   const abortRef = useRef<AbortController | null>(null)
   const shellRef = useRef<HTMLDivElement | null>(null)
@@ -47,6 +54,20 @@ export default function App() {
     setToast(message)
   }, [])
 
+  const goToSurah = useCallback((id: number) => {
+    const versesCount = getSurah(id).versesCount
+    const range = clampAyahRange(1, versesCount, versesCount)
+    setPrefs((p) => ({ ...p, surahId: id, ...range }))
+  }, [])
+
+  const goToSurahRef = useRef(goToSurah)
+  goToSurahRef.current = goToSurah
+  const prevSurahIdRef = useRef(prevSurahId)
+  const nextSurahIdRef = useRef(nextSurahId)
+  prevSurahIdRef.current = prevSurahId
+  nextSurahIdRef.current = nextSurahId
+  const playerStopRef = useRef<() => void>(() => {})
+
   useEffect(() => {
     if (!toast) return
     const t = window.setTimeout(() => setToast(null), 3200)
@@ -56,6 +77,14 @@ export default function App() {
   useEffect(() => {
     const mq = window.matchMedia(PORTRAIT_MOBILE_MQ)
     const sync = () => setIsPortraitMobile(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+
+  useEffect(() => {
+    const mq = window.matchMedia(FS_LANDSCAPE_MQ)
+    const sync = () => setIsLandscape(mq.matches)
     sync()
     mq.addEventListener('change', sync)
     return () => mq.removeEventListener('change', sync)
@@ -97,6 +126,22 @@ export default function App() {
     return () => document.removeEventListener('fullscreenchange', onFsChange)
   }, [])
 
+  const handleSurahPrev = useCallback(() => {
+    const id = prevSurahIdRef.current
+    if (id != null) {
+      playerStopRef.current()
+      goToSurahRef.current(id)
+    }
+  }, [])
+
+  const handleSurahNext = useCallback(() => {
+    const id = nextSurahIdRef.current
+    if (id != null) {
+      playerStopRef.current()
+      goToSurahRef.current(id)
+    }
+  }, [])
+
   const player = usePlayer({
     surahId: prefs.surahId,
     versesCount: surah.versesCount,
@@ -104,9 +149,15 @@ export default function App() {
     repeats: prefs.repeats,
     rangeFrom: prefs.rangeFrom,
     rangeTo: prefs.rangeTo,
+    pageNumber: prefs.pageNumber,
     reciterId: prefs.reciterId,
+    physicalNav: prefs.physicalNav,
+    onSurahPrev: handleSurahPrev,
+    onSurahNext: handleSurahNext,
     onToast,
   })
+
+  playerStopRef.current = player.stop
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
@@ -121,11 +172,9 @@ export default function App() {
     setPrefs((p) => ({ ...p, [key]: value }))
   }
 
-  const goToSurah = (id: number) => {
+  const changeSurah = (id: number) => {
     player.stop()
-    const versesCount = getSurah(id).versesCount
-    const range = clampAyahRange(1, versesCount, versesCount)
-    setPrefs((p) => ({ ...p, surahId: id, ...range }))
+    goToSurah(id)
   }
 
   const handleDownload = async () => {
@@ -181,7 +230,12 @@ export default function App() {
     }
   }
 
+  const setPageNumber = useCallback((page: number) => {
+    setPrefs((p) => (p.pageNumber === page ? p : { ...p, pageNumber: page }))
+  }, [])
+
   const panelIsCollapsed = isPortraitMobile && panelCollapsed
+  const chromeInHeader = isFullscreen && isLandscape
   const shellClass = [
     'app-shell',
     panelIsCollapsed ? 'panel-collapsed' : '',
@@ -196,27 +250,18 @@ export default function App() {
       <SetupPanel
         surahId={prefs.surahId}
         mode={prefs.mode}
-        repeats={prefs.repeats}
         rangeFrom={prefs.rangeFrom}
         rangeTo={prefs.rangeTo}
         versesCount={surah.versesCount}
-        reciterId={prefs.reciterId}
         theme={prefs.theme}
-        font={prefs.font}
-        fontScale={prefs.fontScale}
-        displayMode={prefs.displayMode}
         downloadStatus={downloadStatus}
         downloadProgress={downloadProgress}
         collapsed={panelIsCollapsed}
         onToggleCollapsed={() => setPanelCollapsed((v) => !v)}
-        onSurahChange={goToSurah}
+        onSurahChange={changeSurah}
         onModeChange={(mode: RepeatMode) => {
           player.stop()
           update('mode', mode)
-        }}
-        onRepeatsChange={(n) => {
-          player.stop()
-          update('repeats', n)
         }}
         onRangeFromChange={(n) => {
           player.stop()
@@ -228,17 +273,11 @@ export default function App() {
           const range = clampAyahRange(prefs.rangeFrom, n, surah.versesCount)
           setPrefs((p) => ({ ...p, ...range }))
         }}
-        onReciterChange={(id) => {
-          player.stop()
-          update('reciterId', id)
-        }}
         onThemeChange={(theme: ThemeId) => update('theme', theme)}
-        onFontChange={(font: FontId) => update('font', font)}
-        onFontScaleChange={(scale) => update('fontScale', scale)}
-        onDisplayModeChange={(mode: DisplayMode) => update('displayMode', mode)}
         onDownload={() => void handleDownload()}
         onRemoveDownload={() => void handleRemove()}
         onPlay={() => player.play()}
+        onOpenSettings={() => setSettingsOpen(true)}
         isPlaying={player.isPlaying}
       />
 
@@ -246,9 +285,13 @@ export default function App() {
         <AyahReader
           ayahs={ayahs}
           activeAyah={player.currentAyah}
+          activeSurahId={player.currentSurahId}
           surahId={prefs.surahId}
           surahName={`${surah.nameSimple} · ${surah.nameArabic}`}
           displayMode={prefs.displayMode}
+          pageNumber={prefs.pageNumber}
+          onPageChange={setPageNumber}
+          chromeInHeader={chromeInHeader}
           headerActions={
             <ReaderChrome
               isFullscreen={isFullscreen}
@@ -272,13 +315,36 @@ export default function App() {
           onToggle={player.toggle}
           onNext={player.next}
           onPrevSurah={() => {
-            if (prevSurahId != null) goToSurah(prevSurahId)
+            if (prevSurahId != null) changeSurah(prevSurahId)
           }}
           onNextSurah={() => {
-            if (nextSurahId != null) goToSurah(nextSurahId)
+            if (nextSurahId != null) changeSurah(nextSurahId)
           }}
         />
       </section>
+
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        displayMode={prefs.displayMode}
+        font={prefs.font}
+        fontScale={prefs.fontScale}
+        physicalNav={prefs.physicalNav}
+        repeats={prefs.repeats}
+        reciterId={prefs.reciterId}
+        onDisplayModeChange={(mode: DisplayMode) => update('displayMode', mode)}
+        onFontChange={(font: FontId) => update('font', font)}
+        onFontScaleChange={(scale) => update('fontScale', scale)}
+        onPhysicalNavChange={(value: PhysicalNav) => update('physicalNav', value)}
+        onRepeatsChange={(n) => {
+          player.stop()
+          update('repeats', n)
+        }}
+        onReciterChange={(id) => {
+          player.stop()
+          update('reciterId', id)
+        }}
+      />
 
       {toast ? (
         <div className="toast" role="status">

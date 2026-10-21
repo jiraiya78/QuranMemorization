@@ -1,5 +1,6 @@
-import type { AppPrefs, DisplayMode, RepeatMode } from '../types'
+import type { AppPrefs, DisplayMode, PhysicalNav, RepeatMode } from '../types'
 import { RECITERS } from '../data/reciters'
+import { MUSHAF_PAGE_COUNT } from '../data/mushaf'
 import { getSurah } from '../data/quran'
 
 const KEY = 'recitehelper.prefs.v1'
@@ -14,11 +15,13 @@ const DEFAULTS: AppPrefs = {
   repeats: 3,
   rangeFrom: 1,
   rangeTo: 7,
+  pageNumber: 1,
   reciterId: RECITERS[0].id,
   theme: 'emerald',
   font: 'scheherazade',
   fontScale: 1,
   displayMode: 'mushaf',
+  physicalNav: 'ayah',
 }
 
 function normalizeDisplayMode(value: unknown): DisplayMode {
@@ -26,8 +29,20 @@ function normalizeDisplayMode(value: unknown): DisplayMode {
 }
 
 function normalizeMode(value: unknown): RepeatMode {
-  if (value === 'surah' || value === 'ayah' || value === 'range') return value
+  if (value === 'surah' || value === 'ayah' || value === 'range' || value === 'page') {
+    return value
+  }
   return DEFAULTS.mode
+}
+
+function normalizePhysicalNav(value: unknown): PhysicalNav {
+  return value === 'surah' ? 'surah' : 'ayah'
+}
+
+function clampPageNumber(value: unknown): number {
+  const n = Math.round(Number(value))
+  if (!Number.isFinite(n)) return DEFAULTS.pageNumber
+  return Math.min(MUSHAF_PAGE_COUNT, Math.max(1, n))
 }
 
 function clampFontScale(value: unknown): number {
@@ -70,8 +85,10 @@ export function loadPrefs(): AppPrefs {
       mode: normalizeMode(rest.mode),
       repeats: Math.min(99, Math.max(1, Number(rest.repeats) || DEFAULTS.repeats)),
       ...range,
+      pageNumber: clampPageNumber(rest.pageNumber ?? DEFAULTS.pageNumber),
       fontScale: clampFontScale(rest.fontScale ?? DEFAULTS.fontScale),
       displayMode: normalizeDisplayMode(rest.displayMode ?? DEFAULTS.displayMode),
+      physicalNav: normalizePhysicalNav(rest.physicalNav),
     }
   } catch {
     return { ...DEFAULTS }

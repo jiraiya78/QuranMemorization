@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { BISMILLAH } from '../data/bismillah'
 import {
-  MUSHAF_PAGE_COUNT,
-  clampPage,
   getLineDecorations,
   getMushafPage,
   getPageRangeLabel,
@@ -12,7 +10,9 @@ import {
   type LineDecoration,
   type MushafSegment,
 } from '../data/mushaf'
+import { getSurah } from '../data/quran'
 import { toArabicIndic } from '../lib/arabicNumerals'
+import { MushafPageChrome } from './MushafPageChrome'
 
 const LINE_SLOTS = 15
 
@@ -21,6 +21,8 @@ interface Props {
   activeSurahId: number
   activeAyah: number
   onPageChange: (page: number) => void
+  /** When true, page chrome is rendered by the parent (e.g. fullscreen landscape). */
+  hideChrome?: boolean
 }
 
 function isActiveSeg(seg: MushafSegment, surahId: number, ayah: number): boolean {
@@ -28,12 +30,31 @@ function isActiveSeg(seg: MushafSegment, surahId: number, ayah: number): boolean
   return seg.s === surahId && seg.a === ayah
 }
 
-function BannerWing() {
-  return <span className="mushaf-banner-wing" aria-hidden />
-}
-
-function BannerGem() {
-  return <span className="mushaf-banner-gem" aria-hidden />
+function SurahBanner({
+  surahId,
+  mid,
+}: {
+  surahId: number
+  mid?: boolean
+}) {
+  const meta = getSurah(surahId)
+  return (
+    <div className={`mushaf-surah-banner${mid ? ' is-mid' : ''}`} aria-hidden>
+      <div className="mushaf-banner-pattern" />
+      <div className="mushaf-banner-medallion" title={`${meta.versesCount} ayahs`}>
+        <span className="mushaf-banner-medallion-num">{toArabicIndic(meta.versesCount)}</span>
+        <span className="mushaf-banner-medallion-cap">آية</span>
+      </div>
+      <div className="mushaf-banner-cartouche">
+        {mid ? <span className="mushaf-mid-label">منتصف القرآن</span> : null}
+        <span className="mushaf-ornament-title">{surahBannerLabel(surahId)}</span>
+      </div>
+      <div className="mushaf-banner-medallion" title={`Surah ${surahId}`}>
+        <span className="mushaf-banner-medallion-num">{toArabicIndic(surahId)}</span>
+        <span className="mushaf-banner-medallion-cap">سورة</span>
+      </div>
+    </div>
+  )
 }
 
 function LineOrnament({ deco }: { deco: LineDecoration }) {
@@ -48,16 +69,7 @@ function LineOrnament({ deco }: { deco: LineDecoration }) {
   if (deco.kind === 'midquran') {
     return (
       <div className="mushaf-line-ornament is-midquran" aria-hidden>
-        <div className="mushaf-surah-banner is-mid">
-          <BannerWing />
-          <BannerGem />
-          <div className="mushaf-banner-core">
-            <span className="mushaf-mid-label">منتصف القرآن</span>
-            <span className="mushaf-ornament-title">{surahBannerLabel(deco.surahId)}</span>
-          </div>
-          <BannerGem />
-          <BannerWing />
-        </div>
+        <SurahBanner surahId={deco.surahId} mid />
       </div>
     )
   }
@@ -67,13 +79,7 @@ function LineOrnament({ deco }: { deco: LineDecoration }) {
       className={`mushaf-line-ornament is-surah${deco.withBasmala ? ' with-basmala' : ''}`}
       aria-hidden
     >
-      <div className="mushaf-surah-banner">
-        <BannerWing />
-        <BannerGem />
-        <span className="mushaf-ornament-title">{surahBannerLabel(deco.surahId)}</span>
-        <BannerGem />
-        <BannerWing />
-      </div>
+      <SurahBanner surahId={deco.surahId} />
       {deco.withBasmala ? (
         <span className="mushaf-ornament-basmala">{BISMILLAH.arabic}</span>
       ) : null}
@@ -81,7 +87,13 @@ function LineOrnament({ deco }: { deco: LineDecoration }) {
   )
 }
 
-export function MushafPage({ page, activeSurahId, activeAyah, onPageChange }: Props) {
+export function MushafPage({
+  page,
+  activeSurahId,
+  activeAyah,
+  onPageChange,
+  hideChrome = false,
+}: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const linesRootRef = useRef<HTMLDivElement | null>(null)
   const activeRef = useRef<HTMLElement | null>(null)
@@ -93,10 +105,7 @@ export function MushafPage({ page, activeSurahId, activeAyah, onPageChange }: Pr
   const decorations = useMemo(() => getLineDecorations(page), [page])
 
   const linesByN = useMemo(() => {
-    const map = new Map<
-      number,
-      NonNullable<typeof pageData>['lines'][number]
-    >()
+    const map = new Map<number, NonNullable<typeof pageData>['lines'][number]>()
     if (pageData) {
       for (const line of pageData.lines) map.set(line.n, line)
     }
@@ -104,23 +113,46 @@ export function MushafPage({ page, activeSurahId, activeAyah, onPageChange }: Pr
   }, [pageData])
 
   useEffect(() => {
-    const node = activeRef.current
-    const viewport = viewportRef.current
-    if (!node || !viewport) return
-    const nodeRect = node.getBoundingClientRect()
-    const viewRect = viewport.getBoundingClientRect()
-    const offset =
-      nodeRect.top - viewRect.top - viewRect.height / 2 + nodeRect.height / 2
-    viewport.scrollBy({ top: offset, behavior: 'smooth' })
-  }, [activeSurahId, activeAyah, page])
-
-  /**
-   * Shared font-size on the lines root so row height (em) tracks it.
-   * Keep ayah-list base size; only shrink when a Madani line would overflow.
-   */
-  useEffect(() => {
     const root = linesRootRef.current
     if (!root) return
+
+    const paintHighlights = () => {
+      for (const old of root.querySelectorAll('.mushaf-line-highlight')) {
+        old.remove()
+      }
+
+      for (const line of root.querySelectorAll<HTMLElement>(
+        '.mushaf-line:not(.is-empty):not(.is-ornament)',
+      )) {
+        const pieces = [
+          ...line.querySelectorAll<HTMLElement>(
+            '.mushaf-seg.active .mushaf-word, .mushaf-seg.active .mushaf-ayah-mark',
+          ),
+        ]
+        if (pieces.length === 0) continue
+
+        const lineRect = line.getBoundingClientRect()
+        let minL = Infinity
+        let maxR = -Infinity
+        for (const el of pieces) {
+          const r = el.getBoundingClientRect()
+          minL = Math.min(minL, r.left)
+          maxR = Math.max(maxR, r.right)
+        }
+        if (!Number.isFinite(minL) || maxR <= minL) continue
+
+        const pad = Math.max(6, Number.parseFloat(getComputedStyle(line).fontSize) * 0.22)
+        const left = Math.max(0, minL - lineRect.left - pad)
+        const right = Math.min(lineRect.width, maxR - lineRect.left + pad)
+
+        const band = document.createElement('div')
+        band.className = 'mushaf-line-highlight'
+        band.setAttribute('aria-hidden', 'true')
+        band.style.left = `${left}px`
+        band.style.width = `${Math.max(0, right - left)}px`
+        line.insertBefore(band, line.firstChild)
+      }
+    }
 
     const fit = () => {
       const lines = [
@@ -159,50 +191,50 @@ export function MushafPage({ page, activeSurahId, activeAyah, onPageChange }: Pr
         const fill = line.scrollWidth / Math.max(1, line.clientWidth)
         line.classList.toggle('is-full', fill >= 0.9)
       }
+
+      paintHighlights()
     }
 
     fit()
     const ro = new ResizeObserver(fit)
     ro.observe(root)
     return () => ro.disconnect()
-  }, [page, pageData, decorations])
+  }, [page, pageData, decorations, activeSurahId, activeAyah])
+
+  useEffect(() => {
+    const root = linesRootRef.current
+    const viewport = viewportRef.current
+    if (!root || !viewport) return
+
+    const id = window.requestAnimationFrame(() => {
+      const node =
+        root.querySelector<HTMLElement>(
+          '.mushaf-seg.active .mushaf-word, .mushaf-seg.active .mushaf-ayah-mark',
+        ) ?? activeRef.current
+      if (!node) return
+      const nodeRect = node.getBoundingClientRect()
+      const viewRect = viewport.getBoundingClientRect()
+      if (nodeRect.width <= 0 && nodeRect.height <= 0) return
+      const offset =
+        nodeRect.top - viewRect.top - viewRect.height / 2 + nodeRect.height / 2
+      viewport.scrollBy({ top: offset, behavior: 'smooth' })
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [activeSurahId, activeAyah, page])
 
   const slots = Array.from({ length: LINE_SLOTS }, (_, i) => i + 1)
   const centerPage = special === 'fatihah' || special === 'baqarah'
 
   return (
     <div className="mushaf-viewer">
-      <div className="mushaf-page-chrome">
-        <button
-          type="button"
-          className="mushaf-page-nav"
-          disabled={page <= 1}
-          aria-label="Previous page"
-          onClick={() => onPageChange(clampPage(page - 1))}
-        >
-          ‹
-        </button>
-        <div className="mushaf-page-meta">
-          <span className="mushaf-page-number">
-            Page {page} / {MUSHAF_PAGE_COUNT}
-          </span>
-          {rangeLabel ? (
-            <span className="mushaf-page-limits" title={surahNames}>
-              {rangeLabel}
-              {surahNames ? ` · ${surahNames}` : ''}
-            </span>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          className="mushaf-page-nav"
-          disabled={page >= MUSHAF_PAGE_COUNT}
-          aria-label="Next page"
-          onClick={() => onPageChange(clampPage(page + 1))}
-        >
-          ›
-        </button>
-      </div>
+      {!hideChrome ? (
+        <MushafPageChrome
+          page={page}
+          rangeLabel={rangeLabel}
+          surahNames={surahNames}
+          onPageChange={onPageChange}
+        />
+      ) : null}
 
       <div className="mushaf-viewport" ref={viewportRef}>
         <div
@@ -216,11 +248,7 @@ export function MushafPage({ page, activeSurahId, activeAyah, onPageChange }: Pr
                 const deco = decorations.get(n)
                 if (deco) {
                   return (
-                    <div
-                      key={n}
-                      className="mushaf-line is-ornament"
-                      data-line={n}
-                    >
+                    <div key={n} className="mushaf-line is-ornament" data-line={n}>
                       <LineOrnament deco={deco} />
                     </div>
                   )
@@ -229,13 +257,7 @@ export function MushafPage({ page, activeSurahId, activeAyah, onPageChange }: Pr
                 const line = linesByN.get(n)
                 const segs = line?.segs ?? []
                 if (segs.length === 0) {
-                  return (
-                    <div
-                      key={n}
-                      className="mushaf-line is-empty"
-                      data-line={n}
-                    />
-                  )
+                  return <div key={n} className="mushaf-line is-empty" data-line={n} />
                 }
 
                 return (
@@ -300,5 +322,15 @@ export function MushafPage({ page, activeSurahId, activeAyah, onPageChange }: Pr
         </div>
       </div>
     </div>
+  )
+}
+
+export function useMushafPageMeta(page: number) {
+  return useMemo(
+    () => ({
+      rangeLabel: getPageRangeLabel(page),
+      surahNames: getPageSurahNames(page),
+    }),
+    [page],
   )
 }
