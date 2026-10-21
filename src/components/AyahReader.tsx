@@ -124,7 +124,28 @@ export function AyahReader({
       scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
-    activeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    const node = activeRef.current
+    const scroller = scrollRef.current
+    if (!node || !scroller) return
+
+    // Only scroll when the ayah is not already comfortably in view.
+    const nodeRect = node.getBoundingClientRect()
+    const viewRect = scroller.getBoundingClientRect()
+    const margin = Math.max(12, viewRect.height * 0.1)
+    const visibleTop = viewRect.top + margin
+    const visibleBottom = viewRect.bottom - margin
+    if (nodeRect.top >= visibleTop && nodeRect.bottom <= visibleBottom) return
+
+    // Stop the list scroller from also scrolling ancestors during follow.
+    const prev = scroller.style.overflowAnchor
+    scroller.style.overflowAnchor = 'none'
+    node.scrollIntoView({
+      behavior: 'smooth',
+      block: nodeRect.height > visibleBottom - visibleTop ? 'center' : 'nearest',
+    })
+    window.setTimeout(() => {
+      scroller.style.overflowAnchor = prev
+    }, 400)
   }, [activeAyah, displayMode, focusSurahKey, surahId])
 
   /** New ayah starts collapsed again — long translations stay in their 1/4-screen box. */

@@ -175,7 +175,12 @@ export function MushafPage({
   const activeRef = useRef<HTMLElement | null>(null)
   const scrolledFocusKeyRef = useRef(0)
   const baseFitRef = useRef(0)
+  const paintedKeysRef = useRef('')
+  const repaintRef = useRef<(() => void) | null>(null)
   const zoomRef = useRef(1)
+  /** Read inside the fit closure, which no longer remounts on every ayah step. */
+  const highlightStateRef = useRef({ activeSurahId, activeAyah, selectedSurahId, selectedAyah })
+  highlightStateRef.current = { activeSurahId, activeAyah, selectedSurahId, selectedAyah }
   const [zoom, setZoom] = useState(1)
   zoomRef.current = zoom
 
@@ -233,6 +238,18 @@ export function MushafPage({
         band.style.width = `${Math.max(0, right - left)}px`
         line.insertBefore(band, line.firstChild)
       }
+
+      // Only touch the DOM when the highlight targets actually change.
+      const state = highlightStateRef.current
+      const key = [
+        page,
+        state.activeSurahId,
+        state.activeAyah,
+        state.selectedSurahId ?? '',
+        state.selectedAyah ?? '',
+      ].join(':')
+      if (key === paintedKeysRef.current) return
+      paintedKeysRef.current = key
 
       for (const line of root.querySelectorAll<HTMLElement>(
         '.mushaf-line:not(.is-empty):not(.is-ornament)',
@@ -309,15 +326,28 @@ export function MushafPage({
         viewport.classList.toggle('is-zoomed', zoomRef.current > 1.01)
       }
 
+      // Geometry changed — force a repaint of highlight bands.
+      paintedKeysRef.current = ''
       paintHighlights()
     }
 
+    repaintRef.current = paintHighlights
+    paintedKeysRef.current = ''
     fit()
     const ro = new ResizeObserver(() => fit())
     ro.observe(root)
     if (viewport) ro.observe(viewport)
-    return () => ro.disconnect()
-  }, [page, pageData, decorations, activeSurahId, activeAyah, selectedSurahId, selectedAyah, fitKey])
+    return () => {
+      ro.disconnect()
+      repaintRef.current = null
+    }
+    // Fit runs on page/size changes only — never on every ayah step (avoids reflow jitter).
+  }, [page, pageData, decorations, fitKey])
+
+  /** Ayah/selection changed on the same page: repaint bands only, no re-fit. */
+  useEffect(() => {
+    repaintRef.current?.()
+  }, [activeSurahId, activeAyah, selectedSurahId, selectedAyah, page])
 
   /** Re-apply zoom without re-fitting the Madani base size. */
   useEffect(() => {
@@ -336,6 +366,10 @@ export function MushafPage({
       const fill = line.scrollWidth / Math.max(1, line.clientWidth)
       line.classList.toggle('is-full', fill >= 0.9 && zoom <= 1.01)
     }
+
+    // Font size changed, so highlight band geometry must be re-measured.
+    paintedKeysRef.current = ''
+    repaintRef.current?.()
   }, [zoom])
 
   /** Pinch-to-zoom on the mushaf viewport. */
@@ -435,9 +469,24 @@ export function MushafPage({
       const nodeRect = node.getBoundingClientRect()
       const viewRect = viewport.getBoundingClientRect()
       if (nodeRect.width <= 0 && nodeRect.height <= 0) return
-      const offset =
-        nodeRect.top - viewRect.top - viewRect.height / 2 + nodeRect.height / 2
-      viewport.scrollBy({ top: offset, behavior: 'smooth' })
+
+      // Already comfortably visible — leave the view alone (no jitter while reciting).
+      const margin = Math.max(12, viewRect.height * 0.1)
+      const visibleTop = viewRect.top + margin
+      const visibleBottom = viewRect.bottom - margin
+      if (nodeRect.top >= visibleTop && nodeRect.bottom <= visibleBottom) return
+
+      // Only nudge as far as needed; center only if the ayah cannot fit at all.
+      let delta: number
+      if (nodeRect.height > visibleBottom - visibleTop) {
+        delta = nodeRect.top - viewRect.top - viewRect.height / 2 + nodeRect.height / 2
+      } else if (nodeRect.top < visibleTop) {
+        delta = nodeRect.top - visibleTop
+      } else {
+        delta = nodeRect.bottom - visibleBottom
+      }
+      if (Math.abs(delta) < 2) return
+      viewport.scrollBy({ top: delta, behavior: 'smooth' })
     })
     return () => window.cancelAnimationFrame(id)
   }, [activeSurahId, activeAyah, page])
