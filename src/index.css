@@ -1141,9 +1141,17 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  /* Fade the last line so the scroll affordance is obvious */
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4rem), transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.4rem), transparent 100%);
+  scrollbar-color: color-mix(in srgb, var(--accent) 40%, transparent) transparent;
+}
+
+/* Only fade while text is actually clipped below — a short single line stays crisp. */
+.floating-translation-body.is-scrollable:not(.is-at-end) {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.15rem), transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - 1.15rem),
+    transparent 100%
+  );
 }
 
 .floating-translation-body::-webkit-scrollbar {

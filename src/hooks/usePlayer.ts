@@ -3,7 +3,8 @@ import { buildPlaylist } from '../lib/playlist'
 import { getPlayableUrl } from '../lib/offlineCache'
 import type { PhysicalNav, RepeatMode } from '../types'
 
-const GAP_MS = 300
+/** Silence between ayahs. Kept short — the next source is preloaded while the current one plays. */
+const GAP_MS = 90
 
 interface UsePlayerOptions {
   surahId: number
@@ -50,6 +51,11 @@ export function usePlayer({
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const objectUrlsRef = useRef<string[]>([])
   const indexRef = useRef(0)
+  /** Resolved sources for upcoming playlist entries, filled while the current ayah plays. */
+  const preloadRef = useRef(new Map<number, string>())
+  const preloadingRef = useRef(new Set<number>())
+  /** Spare element that buffers the next ayah so the following transition starts instantly. */
+  const warmRef = useRef<HTMLAudioElement | null>(null)
   /** Page number only affects playlist in `page` mode — otherwise page nav must not reset playback. */
   const playlistPage = mode === 'page' ? pageNumber : 1
   const playlistRef = useRef(
@@ -77,11 +83,23 @@ export function usePlayer({
   const [currentSurahId, setCurrentSurahId] = useState(surahId)
   const [repeatIndex, setRepeatIndex] = useState(1)
   const [totalRepeats, setTotalRepeats] = useState(repeats)
+  /** Bumped on every playlist move so the reader re-centres even for a repeated ayah. */
+  const [followKey, setFollowKey] = useState(0)
   const [playlistLength, setPlaylistLength] = useState(playlistRef.current.length)
 
   const revokeObjectUrls = () => {
     for (const u of objectUrlsRef.current) URL.revokeObjectURL(u)
     objectUrlsRef.current = []
+  }
+
+  const clearPreload = () => {
+    preloadRef.current.clear()
+    preloadingRef.current.clear()
+    const warm = warmRef.current
+    if (warm) {
+      warm.removeAttribute('src')
+      warm.load()
+    }
   }
 
   const clearGap = () => {
@@ -101,6 +119,7 @@ export function usePlayer({
       rangeTo,
       pageNumber: playlistPage,
     })
+    clearPreload()
     setPlaylistLength(playlistRef.current.length)
   }, [mode, playlistPage, rangeFrom, rangeTo, repeats, surahId, versesCount])
 
@@ -111,7 +130,45 @@ export function usePlayer({
     setCurrentSurahId(item.surahId)
     setRepeatIndex(item.repeatIndex)
     setTotalRepeats(item.totalRepeats)
+    setFollowKey((k) => k + 1)
   }, [])
+
+  /**
+   * Resolve (and buffer) the source for the next playlist entries while the
+   * current ayah is still playing. Page crossings are the slowest case because
+   * they also need a page render, so the audio must already be warm.
+   */
+  const warmUpcoming = useCallback(
+    (fromIndex: number) => {
+      const list = playlistRef.current
+      for (let i = fromIndex + 1; i <= fromIndex + 2 && i < list.length; i++) {
+        if (preloadRef.current.has(i) || preloadingRef.current.has(i)) continue
+        const item = list[i]
+        if (!item) continue
+        preloadingRef.current.add(i)
+        void getPlayableUrl(reciterId, item.surahId, item.ayah)
+          .then((url) => {
+            if (url.startsWith('blob:')) objectUrlsRef.current.push(url)
+            preloadRef.current.set(i, url)
+            // Only the immediate next track is buffered by an element.
+            if (i !== fromIndex + 1) return
+            const warm = warmRef.current ?? new Audio()
+            warmRef.current = warm
+            warm.preload = 'auto'
+            warm.muted = true
+            warm.src = url
+            warm.load()
+          })
+          .catch(() => {
+            // Preloading is best-effort: `goTo` falls back to a normal fetch.
+          })
+          .finally(() => {
+            preloadingRef.current.delete(i)
+          })
+      }
+    },
+    [reciterId],
+  )
 
   /** Load playlist index. Only starts audio when `shouldPlay` is true. */
   const goTo = useCallback(
@@ -134,8 +191,11 @@ export function usePlayer({
       const audio = audioRef.current
 
       try {
-        const url = await getPlayableUrl(reciterId, item.surahId, item.ayah)
-        if (url.startsWith('blob:')) objectUrlsRef.current.push(url)
+        // A warm source lets playback start in the same frame as the page switch.
+        const preloaded = preloadRef.current.get(index)
+        preloadRef.current.delete(index)
+        const url = preloaded ?? (await getPlayableUrl(reciterId, item.surahId, item.ayah))
+        if (!preloaded && url.startsWith('blob:')) objectUrlsRef.current.push(url)
         audio.src = url
         audio.load()
 
@@ -157,8 +217,9 @@ export function usePlayer({
           }, GAP_MS)
         }
       }
+      warmUpcoming(index)
     },
-    [onToast, reciterId, syncMeta],
+    [onToast, reciterId, syncMeta, warmUpcoming],
   )
 
   useEffect(() => {
@@ -166,6 +227,11 @@ export function usePlayer({
     indexRef.current = 0
     syncMeta(0)
   }, [rebuildPlaylist, syncMeta])
+
+  /** Cached sources belong to the previous reciter — start over on change. */
+  useEffect(() => {
+    clearPreload()
+  }, [reciterId])
 
   useEffect(() => {
     const audio = audioRef.current ?? new Audio()
@@ -268,6 +334,7 @@ export function usePlayer({
 
   const stop = useCallback(() => {
     pause()
+    clearPreload()
     if (audioRef.current) {
       audioRef.current.removeAttribute('src')
       audioRef.current.load()
@@ -363,6 +430,7 @@ export function usePlayer({
     repeatIndex,
     totalRepeats,
     playlistLength,
+    followKey,
     play,
     playFrom,
     pause,

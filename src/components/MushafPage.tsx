@@ -32,6 +32,8 @@ interface Props {
   focusSurahKey?: number
   /** Re-fit Madani lines when weight/family scale changes. */
   fitKey?: string | number
+  /** Bumped by the player on every playlist move — forces a re-centre. */
+  followKey?: number
   onPageChange: (page: number) => void
   /** When true, page chrome is rendered by the parent (e.g. fullscreen landscape). */
   hideChrome?: boolean
@@ -130,7 +132,11 @@ function SurahBanner({
 function LineOrnament({ deco }: { deco: LineDecoration }) {
   if (deco.kind === 'basmala') {
     return (
-      <div className="mushaf-line-ornament is-basmala" aria-hidden>
+      <div
+        className="mushaf-line-ornament is-basmala"
+        data-surah-start={deco.surahId}
+        aria-hidden
+      >
         <span className="mushaf-ornament-basmala">{BISMILLAH.arabic}</span>
       </div>
     )
@@ -138,7 +144,11 @@ function LineOrnament({ deco }: { deco: LineDecoration }) {
 
   if (deco.kind === 'midquran') {
     return (
-      <div className="mushaf-line-ornament is-midquran" aria-hidden>
+      <div
+        className="mushaf-line-ornament is-midquran"
+        data-surah-start={deco.surahId}
+        aria-hidden
+      >
         <SurahBanner surahId={deco.surahId} mid />
       </div>
     )
@@ -147,6 +157,7 @@ function LineOrnament({ deco }: { deco: LineDecoration }) {
   return (
     <div
       className={`mushaf-line-ornament is-surah${deco.withBasmala ? ' with-basmala' : ''}`}
+      data-surah-start={deco.surahId}
       aria-hidden
     >
       <SurahBanner surahId={deco.surahId} />
@@ -167,6 +178,7 @@ export function MushafPage({
   focusSurahId = null,
   focusSurahKey = 0,
   fitKey = '',
+  followKey = 0,
   onPageChange,
   hideChrome = false,
 }: Props) {
@@ -209,6 +221,19 @@ export function MushafPage({
     }
 
     const paintHighlights = () => {
+      // Bail out BEFORE touching the DOM: the second caller in the same commit
+      // must not wipe the bands that the first one just painted.
+      const state = highlightStateRef.current
+      const key = [
+        page,
+        state.activeSurahId,
+        state.activeAyah,
+        state.selectedSurahId ?? '',
+        state.selectedAyah ?? '',
+      ].join(':')
+      if (key === paintedKeysRef.current) return
+      paintedKeysRef.current = key
+
       for (const old of root.querySelectorAll('.mushaf-line-highlight')) {
         old.remove()
       }
@@ -238,18 +263,6 @@ export function MushafPage({
         band.style.width = `${Math.max(0, right - left)}px`
         line.insertBefore(band, line.firstChild)
       }
-
-      // Only touch the DOM when the highlight targets actually change.
-      const state = highlightStateRef.current
-      const key = [
-        page,
-        state.activeSurahId,
-        state.activeAyah,
-        state.selectedSurahId ?? '',
-        state.selectedAyah ?? '',
-      ].join(':')
-      if (key === paintedKeysRef.current) return
-      paintedKeysRef.current = key
 
       for (const line of root.querySelectorAll<HTMLElement>(
         '.mushaf-line:not(.is-empty):not(.is-ornament)',
@@ -295,21 +308,32 @@ export function MushafPage({
       const overflows = () =>
         lines.some((line) => line.scrollWidth > line.clientWidth + 0.5)
 
-      let lo = floor
-      let hi = computed
-      let best = floor
+      let best = 0
 
-      root.style.fontSize = `${floor}px`
-      if (!overflows()) {
+      // Fast path: most pages fit at exactly the size the previous one used, so
+      // this avoids ~10 forced reflows right when the next ayah's audio starts.
+      const previous = baseFitRef.current
+      if (previous >= floor && previous <= computed) {
+        root.style.fontSize = `${previous}px`
+        if (!overflows()) best = previous
+      }
+
+      if (best === 0) {
+        let lo = floor
+        let hi = computed
         best = floor
-        for (let i = 0; i < 18; i++) {
-          const mid = (lo + hi) / 2
-          root.style.fontSize = `${mid}px`
-          if (overflows()) {
-            hi = mid
-          } else {
-            best = mid
-            lo = mid
+
+        root.style.fontSize = `${floor}px`
+        if (!overflows()) {
+          for (let i = 0; i < 12; i++) {
+            const mid = (lo + hi) / 2
+            root.style.fontSize = `${mid}px`
+            if (overflows()) {
+              hi = mid
+            } else {
+              best = mid
+              lo = mid
+            }
           }
         }
       }
@@ -455,41 +479,65 @@ export function MushafPage({
     }
   }, [focusSurahId, focusSurahKey, page])
 
+  /**
+   * Follow the recitation: keep the active ayah vertically centered, clamped at
+   * the sheet edges (top at the start of the page, bottom at the end). While the
+   * Basmala plays there is no ayah highlight, so aim at the surah header instead.
+   */
   useEffect(() => {
     const root = linesRootRef.current
     const viewport = viewportRef.current
     if (!root || !viewport) return
 
     const id = window.requestAnimationFrame(() => {
-      const node =
-        root.querySelector<HTMLElement>(
-          '.mushaf-seg.active .mushaf-word, .mushaf-seg.active .mushaf-ayah-mark',
-        ) ?? activeRef.current
-      if (!node) return
-      const nodeRect = node.getBoundingClientRect()
-      const viewRect = viewport.getBoundingClientRect()
-      if (nodeRect.width <= 0 && nodeRect.height <= 0) return
+      // The Basmala has no ayah highlight, so its "target" is the surah header.
+      const targets =
+        activeAyah > 0
+          ? [
+              ...root.querySelectorAll<HTMLElement>(
+                '.mushaf-seg.active .mushaf-word, .mushaf-seg.active .mushaf-ayah-mark',
+              ),
+            ]
+          : [...root.querySelectorAll<HTMLElement>(`[data-surah-start="${activeSurahId}"]`)]
 
-      // Already comfortably visible — leave the view alone (no jitter while reciting).
-      const margin = Math.max(12, viewRect.height * 0.1)
-      const visibleTop = viewRect.top + margin
-      const visibleBottom = viewRect.bottom - margin
-      if (nodeRect.top >= visibleTop && nodeRect.bottom <= visibleBottom) return
-
-      // Only nudge as far as needed; center only if the ayah cannot fit at all.
-      let delta: number
-      if (nodeRect.height > visibleBottom - visibleTop) {
-        delta = nodeRect.top - viewRect.top - viewRect.height / 2 + nodeRect.height / 2
-      } else if (nodeRect.top < visibleTop) {
-        delta = nodeRect.top - visibleTop
-      } else {
-        delta = nodeRect.bottom - visibleBottom
+      if (targets.length === 0) {
+        const fallback =
+          activeAyah > 0
+            ? activeRef.current
+            : root.querySelector<HTMLElement>(`[data-ayah^="${activeSurahId}:"]`)
+        if (!fallback) return
+        targets.push(fallback)
       }
-      if (Math.abs(delta) < 2) return
-      viewport.scrollBy({ top: delta, behavior: 'smooth' })
+
+      // Union of the ayah's words (an ayah can wrap over several Madani lines).
+      let top = Infinity
+      let bottom = -Infinity
+      for (const el of targets) {
+        const r = el.getBoundingClientRect()
+        if (r.width <= 0 && r.height <= 0) continue
+        top = Math.min(top, r.top)
+        bottom = Math.max(bottom, r.bottom)
+      }
+      if (!Number.isFinite(top) || bottom <= top) return
+
+      const viewRect = viewport.getBoundingClientRect()
+      const usable = viewport.clientHeight
+      const height = bottom - top
+      // Taller than the screen: pin the start near the top, else centre it.
+      const centered =
+        height >= usable - 16
+          ? top - viewRect.top + viewport.scrollTop - 8
+          : (top + bottom) / 2 -
+            (viewRect.top + usable / 2) +
+            viewport.scrollTop
+
+      const maxScroll = Math.max(0, viewport.scrollHeight - usable)
+      const target = Math.min(maxScroll, Math.max(0, centered))
+      if (Math.abs(target - viewport.scrollTop) < 2) return
+      viewport.scrollTo({ top: target, behavior: 'smooth' })
     })
     return () => window.cancelAnimationFrame(id)
-  }, [activeSurahId, activeAyah, page])
+  }, [activeSurahId, activeAyah, page, followKey])
 
   const slots = Array.from({ length: LINE_SLOTS }, (_, i) => i + 1)
   const centerPage = special === 'fatihah' || special === 'baqarah'

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { getBismillah, isBismillah } from '../data/bismillah'
 import { getAyahs, getTranslationLabel } from '../data/quran'
-import { getPageForAyah } from '../data/mushaf'
+import { getPageForAyah, pageHasSurah } from '../data/mushaf'
 import { useAyahSelectHandlers, type AyahRef } from '../lib/ayahSelect'
 import type { Ayah, DisplayMode, TranslationId } from '../types'
 import { MushafPage, useMushafPageMeta } from './MushafPage'
@@ -24,6 +24,8 @@ interface Props {
   focusSurahId?: number | null
   focusSurahKey?: number
   fitKey?: string | number
+  /** Bumped by the player on every playlist move — forces a re-centre. */
+  followKey?: number
   chromeInHeader?: boolean
   headerActions?: ReactNode
 }
@@ -92,6 +94,7 @@ export function AyahReader({
   focusSurahId = null,
   focusSurahKey = 0,
   fitKey = '',
+  followKey = 0,
   chromeInHeader = false,
   headerActions,
 }: Props) {
@@ -111,11 +114,20 @@ export function AyahReader({
     [activeSurahId, activeAyah],
   )
 
+  /** Latest displayed page — read by the follow effect without re-triggering it. */
+  const pageRef = useRef(pageNumber)
+  pageRef.current = pageNumber
+
   /** Follow the recited ayah onto its Madani page — do not fight manual page buttons. */
   useEffect(() => {
     if (displayMode !== 'mushaf') return
+    // The Basmala has no page of its own. Stay put when the surah is already on
+    // screen (e.g. page-repeat); otherwise open the page where the surah starts.
+    if (isBismillah(activeAyah) && pageHasSurah(pageRef.current, activeSurahId)) {
+      return
+    }
     onPageChange(playbackPage)
-  }, [playbackPage, displayMode, onPageChange])
+  }, [playbackPage, activeAyah, activeSurahId, displayMode, onPageChange])
 
   useEffect(() => {
     if (displayMode !== 'list') return
@@ -128,25 +140,21 @@ export function AyahReader({
     const scroller = scrollRef.current
     if (!node || !scroller) return
 
-    // Only scroll when the ayah is not already comfortably in view.
     const nodeRect = node.getBoundingClientRect()
     const viewRect = scroller.getBoundingClientRect()
-    const margin = Math.max(12, viewRect.height * 0.1)
-    const visibleTop = viewRect.top + margin
-    const visibleBottom = viewRect.bottom - margin
-    if (nodeRect.top >= visibleTop && nodeRect.bottom <= visibleBottom) return
+    if (nodeRect.width <= 0 && nodeRect.height <= 0) return
 
-    // Stop the list scroller from also scrolling ancestors during follow.
-    const prev = scroller.style.overflowAnchor
-    scroller.style.overflowAnchor = 'none'
-    node.scrollIntoView({
-      behavior: 'smooth',
-      block: nodeRect.height > visibleBottom - visibleTop ? 'center' : 'nearest',
-    })
-    window.setTimeout(() => {
-      scroller.style.overflowAnchor = prev
-    }, 400)
-  }, [activeAyah, displayMode, focusSurahKey, surahId])
+    // Center the ayah, or pin a tall block to the top, clamped to the list edges.
+    const offsetInContent = nodeRect.top - viewRect.top + scroller.scrollTop
+    const desired =
+      nodeRect.height >= scroller.clientHeight - 16
+        ? offsetInContent - 8
+        : offsetInContent + nodeRect.height / 2 - scroller.clientHeight / 2
+    const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+    const target = Math.min(maxScroll, Math.max(0, desired))
+    if (Math.abs(target - scroller.scrollTop) < 2) return
+    scroller.scrollTo({ top: target, behavior: 'smooth' })
+  }, [activeAyah, activeSurahId, displayMode, focusSurahKey, surahId, followKey])
 
   /** New ayah starts collapsed again — long translations stay in their 1/4-screen box. */
   useEffect(() => {
@@ -163,6 +171,32 @@ export function AyahReader({
 
   const pageMeta = useMushafPageMeta(pageNumber)
   const showFloating = displayMode === 'mushaf' && showTranslation
+
+  /**
+   * Flag the translation body only while text is clipped below, so the bottom
+   * fade is a real "more below" hint instead of dimming a line that fits.
+   */
+  useEffect(() => {
+    const body = translationBodyRef.current
+    if (!body || !showFloating) return
+
+    const sync = () => {
+      const overflowing = body.scrollHeight - body.clientHeight > 2
+      const atEnd = body.scrollTop + body.clientHeight >= body.scrollHeight - 2
+      body.classList.toggle('is-scrollable', overflowing)
+      body.classList.toggle('is-at-end', atEnd)
+    }
+
+    sync()
+    body.addEventListener('scroll', sync, { passive: true })
+    const ro = new ResizeObserver(sync)
+    ro.observe(body)
+    if (body.firstElementChild) ro.observe(body.firstElementChild)
+    return () => {
+      body.removeEventListener('scroll', sync)
+      ro.disconnect()
+    }
+  }, [showFloating, activeTranslation, translationExpanded, translationId, activeAyah])
 
   return (
     <div
@@ -198,6 +232,7 @@ export function AyahReader({
             focusSurahId={focusSurahId}
             focusSurahKey={focusSurahKey}
             fitKey={fitKey}
+            followKey={followKey}
             onPageChange={onPageChange}
             hideChrome={chromeInHeader}
           />

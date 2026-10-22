@@ -76,6 +76,13 @@ export function clampPage(page: number): number {
   return Math.min(MUSHAF_PAGE_COUNT, Math.max(1, Math.round(page) || 1))
 }
 
+/** True when the Madani page carries at least one ayah of this surah. */
+export function pageHasSurah(page: number, surahId: number): boolean {
+  const p = getMushafPage(page)
+  if (!p) return false
+  return p.lines.some((line) => line.segs.some((seg) => seg.s === surahId))
+}
+
 /** Human-readable span of content on a page, e.g. "1:1–1:7" or "2:5–2:16". */
 export function getPageRangeLabel(page: number): string {
   const p = getMushafPage(page)

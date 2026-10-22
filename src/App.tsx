@@ -363,6 +363,7 @@ export default function App() {
           focusSurahId={focusSurahId}
           focusSurahKey={focusSurahKey}
           fitKey={`${prefs.font}:${prefs.fontWeight}:${prefs.fontScale}`}
+          followKey={player.followKey}
           chromeInHeader={chromeInHeader}
           headerActions={
             <ReaderChrome
