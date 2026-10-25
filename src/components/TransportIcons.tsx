@@ -33,6 +33,14 @@ export function IconPause() {
   )
 }
 
+export function IconStop() {
+  return (
+    <svg className="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect fill="currentColor" x="6" y="6" width="12" height="12" rx="2.2" />
+    </svg>
+  )
+}
+
 export function IconNext() {
   return (
     <svg className="ctrl-icon" viewBox="0 0 24 24" aria-hidden="true">

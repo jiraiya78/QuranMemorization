@@ -4,11 +4,15 @@ import { AyahReader } from './components/AyahReader'
 import { PlayerDock } from './components/PlayerDock'
 import { ReaderChrome } from './components/ReaderChrome'
 import { SettingsModal } from './components/SettingsModal'
-import { getPageForAyah } from './data/mushaf'
-import { getAdjacentSurahId, getAyahs, getSurah } from './data/quran'
+import { TranslationPanel } from './components/TranslationPanel'
+import { clampPage, getPageForAyah } from './data/mushaf'
+import { getAdjacentSurahId, getAyahs, getSurah, getTranslationLabel } from './data/quran'
 import { usePlayer } from './hooks/usePlayer'
 import { usePwaInstall } from './hooks/usePwaInstall'
+import { useSpatialNav } from './hooks/useSpatialNav'
+import { getActiveTranslation } from './lib/activeTranslation'
 import type { AyahRef } from './lib/ayahSelect'
+import { looksLikeTv, wideLandscapeQuery } from './lib/device'
 import {
   downloadSurah,
   isSurahCached,
@@ -22,10 +26,13 @@ import type {
   FontId,
   FontWeight,
   MushafWidth,
+  PageFit,
   PhysicalNav,
+  RailPanel,
   RepeatMode,
   ThemeId,
   TranslationId,
+  TvNav,
 } from './types'
 
 const PORTRAIT_MOBILE_MQ = '(max-width: 900px) and (orientation: portrait)'
@@ -50,6 +57,8 @@ export default function App() {
   const [isLandscape, setIsLandscape] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(FS_LANDSCAPE_MQ).matches : false,
   )
+  const [isWideLandscape, setIsWideLandscape] = useState(() => wideLandscapeQuery()?.matches ?? false)
+  const tvDetected = useMemo(() => looksLikeTv(), [])
   const abortRef = useRef<AbortController | null>(null)
   const shellRef = useRef<HTMLDivElement | null>(null)
   const pendingPlayFromRef = useRef<AyahRef | null>(null)
@@ -74,6 +83,11 @@ export default function App() {
     setPrefs((p) => ({ ...p, surahId: id, ...range, pageNumber }))
     setFocusSurahId(id)
     setFocusSurahKey((k) => k + 1)
+  }, [])
+
+  /** Page Up/Down, TV channel keys and the header page arrows. */
+  const stepPage = useCallback((delta: number) => {
+    setPrefs((p) => ({ ...p, pageNumber: clampPage(p.pageNumber + delta) }))
   }, [])
 
   const goToSurahRef = useRef(goToSurah)
@@ -107,12 +121,24 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    const mq = wideLandscapeQuery()
+    if (!mq) return
+    const sync = () => setIsWideLandscape(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+
+  useEffect(() => {
     savePrefs(prefs)
     document.documentElement.dataset.theme = prefs.theme
     document.documentElement.dataset.font = prefs.font
     document.documentElement.dataset.fontWeight = prefs.fontWeight
     document.documentElement.dataset.mushafWidth = prefs.mushafWidth
+    document.documentElement.dataset.pageFit = prefs.pageFit
     document.documentElement.style.setProperty('--font-scale', String(prefs.fontScale))
+    // Interface zoom: every rem-based size (chrome, panels, buttons) follows this.
+    document.documentElement.style.fontSize = `${(16 * prefs.uiScale).toFixed(2)}px`
   }, [prefs])
 
   useEffect(() => {
@@ -158,6 +184,8 @@ export default function App() {
     }
   }, [])
 
+  const playPageRef = useRef<(surahId: number, ayah: number) => void>(() => {})
+
   const player = usePlayer({
     surahId: prefs.surahId,
     versesCount: surah.versesCount,
@@ -168,8 +196,12 @@ export default function App() {
     pageNumber: prefs.pageNumber,
     reciterId: prefs.reciterId,
     physicalNav: prefs.physicalNav,
+    remoteNav: prefs.tvNav === 'on' || (prefs.tvNav === 'auto' && tvDetected),
     onSurahPrev: handleSurahPrev,
     onSurahNext: handleSurahNext,
+    onPagePrev: () => stepPage(-1),
+    onPageNext: () => stepPage(1),
+    onPlayPage: (surahId, ayah) => playPageRef.current(surahId, ayah),
     onToast,
   })
 
@@ -204,6 +236,10 @@ export default function App() {
     },
     [prefs.mode, prefs.surahId, player.playFrom],
   )
+
+  // The player asks for a page outside its queue (browsed into another surah):
+  // retarget surah + range, then start from that ayah.
+  playPageRef.current = (surahId, ayah) => playFromSelection({ surahId, ayah })
 
   useEffect(() => {
     const pending = pendingPlayFromRef.current
@@ -298,8 +334,30 @@ export default function App() {
   }
 
   const setPageNumber = useCallback((page: number) => {
-    setPrefs((p) => (p.pageNumber === page ? p : { ...p, pageNumber: page }))
+    const next = clampPage(page)
+    setPrefs((p) => (p.pageNumber === next ? p : { ...p, pageNumber: next }))
   }, [])
+
+  const tvNavActive = prefs.tvNav === 'on' || (prefs.tvNav === 'auto' && tvDetected)
+  useSpatialNav(tvNavActive)
+
+  const sidePanel =
+    !isPortraitMobile &&
+    (prefs.railPanel === 'on' || (prefs.railPanel === 'auto' && isWideLandscape))
+
+  const activeTranslation = useMemo(
+    () =>
+      getActiveTranslation({
+        activeAyah: player.currentAyah,
+        activeSurahId: player.currentSurahId,
+        surahId: prefs.surahId,
+        ayahs,
+        translationId: prefs.translationId,
+      }),
+    [player.currentAyah, player.currentSurahId, prefs.surahId, ayahs, prefs.translationId],
+  )
+  const translationLabel = getTranslationLabel(prefs.translationId)
+  const translationResetKey = `${player.currentSurahId}:${player.currentAyah}:${prefs.translationId}`
 
   const chromeInHeader = isFullscreen && isLandscape
   const shellClass = [
@@ -307,6 +365,8 @@ export default function App() {
     panelOpen ? 'panel-open' : 'panel-hidden',
     isFullscreen ? 'is-fullscreen' : '',
     isPortraitMobile ? 'is-portrait-mobile' : '',
+    sidePanel ? 'has-side-rail' : '',
+    tvNavActive ? 'is-tv-nav' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -345,55 +405,97 @@ export default function App() {
         onClose={() => setPanelOpen(false)}
       />
 
-      <section className="reader-pane">
-        <AyahReader
-          ayahs={ayahs}
-          activeAyah={player.currentAyah}
-          activeSurahId={player.currentSurahId}
-          surahId={prefs.surahId}
-          surahName={`${surah.nameSimple} · ${surah.nameArabic}`}
-          displayMode={prefs.displayMode}
-          translationId={prefs.translationId}
-          showTranslation={prefs.showTranslation}
-          pageNumber={prefs.pageNumber}
-          onPageChange={setPageNumber}
-          selectedSurahId={selectedAyah?.surahId ?? null}
-          selectedAyah={selectedAyah?.ayah ?? null}
-          onSelectAyah={handleSelectAyah}
-          focusSurahId={focusSurahId}
-          focusSurahKey={focusSurahKey}
-          fitKey={`${prefs.font}:${prefs.fontWeight}:${prefs.fontScale}`}
-          followKey={player.followKey}
-          chromeInHeader={chromeInHeader}
-          headerActions={
-            <ReaderChrome
-              isFullscreen={isFullscreen}
-              panelOpen={panelOpen}
-              canInstall={pwa.canInstall || !pwa.installed}
-              onToggleFullscreen={() => void toggleFullscreen()}
-              onTogglePanel={() => setPanelOpen((v) => !v)}
-              onInstall={() => void handleInstall()}
+      <section className={`reader-pane${sidePanel ? ' has-rail' : ''}`}>
+        <div className="reader-main">
+          <AyahReader
+            ayahs={ayahs}
+            activeAyah={player.currentAyah}
+            activeSurahId={player.currentSurahId}
+            surahId={prefs.surahId}
+            surahName={`${surah.nameSimple} · ${surah.nameArabic}`}
+            displayMode={prefs.displayMode}
+            translationId={prefs.translationId}
+            showTranslation={prefs.showTranslation}
+            pageNumber={prefs.pageNumber}
+            onPageChange={setPageNumber}
+            selectedSurahId={selectedAyah?.surahId ?? null}
+            selectedAyah={selectedAyah?.ayah ?? null}
+            onSelectAyah={handleSelectAyah}
+            focusSurahId={focusSurahId}
+            focusSurahKey={focusSurahKey}
+            fitKey={`${prefs.font}:${prefs.fontWeight}`}
+            fontScale={prefs.fontScale}
+            pageFit={prefs.pageFit}
+            followKey={player.followKey}
+            chromeInHeader={chromeInHeader}
+            hideTranslationPanel={sidePanel}
+            headerActions={
+              <ReaderChrome
+                isFullscreen={isFullscreen}
+                panelOpen={panelOpen}
+                canInstall={pwa.canInstall || !pwa.installed}
+                onToggleFullscreen={() => void toggleFullscreen()}
+                onTogglePanel={() => setPanelOpen((v) => !v)}
+                onInstall={() => void handleInstall()}
+              />
+            }
+          />
+        </div>
+
+        {sidePanel ? (
+          <aside className="reader-rail">
+            {prefs.showTranslation && prefs.displayMode === 'mushaf' && activeTranslation ? (
+              <TranslationPanel
+                variant="rail"
+                text={activeTranslation}
+                credit={translationLabel}
+                resetKey={translationResetKey}
+              />
+            ) : null}
+            <PlayerDock
+              variant="rail"
+              isPlaying={player.isPlaying}
+              canStop={player.isLoaded}
+              currentAyah={player.currentAyah}
+              versesCount={surah.versesCount}
+              repeatIndex={player.repeatIndex}
+              totalRepeats={player.totalRepeats}
+              canPrevSurah={prevSurahId != null}
+              canNextSurah={nextSurahId != null}
+              onPrev={player.prev}
+              onToggle={handleToggle}
+              onNext={player.next}
+              onStop={player.stop}
+              onPrevSurah={() => {
+                if (prevSurahId != null) changeSurah(prevSurahId)
+              }}
+              onNextSurah={() => {
+                if (nextSurahId != null) changeSurah(nextSurahId)
+              }}
             />
-          }
-        />
-        <PlayerDock
-          isPlaying={player.isPlaying}
-          currentAyah={player.currentAyah}
-          versesCount={surah.versesCount}
-          repeatIndex={player.repeatIndex}
-          totalRepeats={player.totalRepeats}
-          canPrevSurah={prevSurahId != null}
-          canNextSurah={nextSurahId != null}
-          onPrev={player.prev}
-          onToggle={handleToggle}
-          onNext={player.next}
-          onPrevSurah={() => {
-            if (prevSurahId != null) changeSurah(prevSurahId)
-          }}
-          onNextSurah={() => {
-            if (nextSurahId != null) changeSurah(nextSurahId)
-          }}
-        />
+          </aside>
+        ) : (
+          <PlayerDock
+            isPlaying={player.isPlaying}
+            canStop={player.isLoaded}
+            currentAyah={player.currentAyah}
+            versesCount={surah.versesCount}
+            repeatIndex={player.repeatIndex}
+            totalRepeats={player.totalRepeats}
+            canPrevSurah={prevSurahId != null}
+            canNextSurah={nextSurahId != null}
+            onPrev={player.prev}
+            onToggle={handleToggle}
+            onNext={player.next}
+            onStop={player.stop}
+            onPrevSurah={() => {
+              if (prevSurahId != null) changeSurah(prevSurahId)
+            }}
+            onNextSurah={() => {
+              if (nextSurahId != null) changeSurah(nextSurahId)
+            }}
+          />
+        )}
       </section>
 
       <SettingsModal
@@ -407,6 +509,11 @@ export default function App() {
         showTranslation={prefs.showTranslation}
         physicalNav={prefs.physicalNav}
         mushafWidth={prefs.mushafWidth}
+        pageFit={prefs.pageFit}
+        railPanel={prefs.railPanel}
+        tvNav={prefs.tvNav}
+        uiScale={prefs.uiScale}
+        isTvDetected={tvDetected}
         repeats={prefs.repeats}
         reciterId={prefs.reciterId}
         onDisplayModeChange={(mode: DisplayMode) => update('displayMode', mode)}
@@ -417,6 +524,10 @@ export default function App() {
         onShowTranslationChange={(show: boolean) => update('showTranslation', show)}
         onPhysicalNavChange={(value: PhysicalNav) => update('physicalNav', value)}
         onMushafWidthChange={(value: MushafWidth) => update('mushafWidth', value)}
+        onPageFitChange={(value: PageFit) => update('pageFit', value)}
+        onRailPanelChange={(value: RailPanel) => update('railPanel', value)}
+        onTvNavChange={(value: TvNav) => update('tvNav', value)}
+        onUiScaleChange={(value) => update('uiScale', value)}
         onRepeatsChange={(n) => {
           player.stop()
           update('repeats', n)

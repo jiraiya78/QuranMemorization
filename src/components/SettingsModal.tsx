@@ -3,14 +3,17 @@ import { BISMILLAH, BISMILLAH_AYAH } from '../data/bismillah'
 import { TRANSLATIONS } from '../data/quran'
 import { RECITERS } from '../data/reciters'
 import { getPlayableUrl } from '../lib/offlineCache'
-import { FONT_SCALE_MAX, FONT_SCALE_MIN, FONT_SCALE_STEP } from '../lib/prefs'
+import { FONT_SCALE_MAX, FONT_SCALE_MIN, FONT_SCALE_STEP, UI_SCALE_MAX, UI_SCALE_MIN, UI_SCALE_STEP } from '../lib/prefs'
 import type {
   DisplayMode,
   FontId,
   FontWeight,
   MushafWidth,
+  PageFit,
   PhysicalNav,
+  RailPanel,
   TranslationId,
+  TvNav,
 } from '../types'
 
 const FONTS: { id: FontId; label: string }[] = [
@@ -38,6 +41,11 @@ interface Props {
   showTranslation: boolean
   physicalNav: PhysicalNav
   mushafWidth: MushafWidth
+  pageFit: PageFit
+  railPanel: RailPanel
+  tvNav: TvNav
+  uiScale: number
+  isTvDetected: boolean
   repeats: number
   reciterId: string
   onDisplayModeChange: (mode: DisplayMode) => void
@@ -48,6 +56,10 @@ interface Props {
   onShowTranslationChange: (show: boolean) => void
   onPhysicalNavChange: (value: PhysicalNav) => void
   onMushafWidthChange: (value: MushafWidth) => void
+  onPageFitChange: (value: PageFit) => void
+  onRailPanelChange: (value: RailPanel) => void
+  onTvNavChange: (value: TvNav) => void
+  onUiScaleChange: (value: number) => void
   onRepeatsChange: (n: number) => void
   onReciterChange: (id: string) => void
 }
@@ -63,6 +75,11 @@ export function SettingsModal({
   showTranslation,
   physicalNav,
   mushafWidth,
+  pageFit,
+  railPanel,
+  tvNav,
+  uiScale,
+  isTvDetected,
   repeats,
   reciterId,
   onDisplayModeChange,
@@ -73,6 +90,10 @@ export function SettingsModal({
   onShowTranslationChange,
   onPhysicalNavChange,
   onMushafWidthChange,
+  onPageFitChange,
+  onRailPanelChange,
+  onTvNavChange,
+  onUiScaleChange,
   onRepeatsChange,
   onReciterChange,
 }: Props) {
@@ -285,6 +306,10 @@ export function SettingsModal({
                 A+
               </button>
             </div>
+            <p className="field-hint">
+              Grows until the Madani page is full, then stops so no line ever spills
+              over the page edge. Translation text follows the same size.
+            </p>
           </div>
 
           <div className="field">
@@ -334,6 +359,128 @@ export function SettingsModal({
             </div>
             <p className="field-hint">
               Auto uses A4 width on landscape and desktop; full width on portrait phone.
+            </p>
+          </div>
+
+          <div className="field">
+            <span className="field-label">Mushaf fit</span>
+            <div className="segmented">
+              <button
+                type="button"
+                className={pageFit === 'width' ? 'active' : ''}
+                onClick={() => onPageFitChange('width')}
+              >
+                Fit width
+              </button>
+              <button
+                type="button"
+                className={pageFit === 'screen' ? 'active' : ''}
+                onClick={() => onPageFitChange('screen')}
+              >
+                Whole page
+              </button>
+            </div>
+            <p className="field-hint">
+              Whole page squeezes all 15 lines onto the screen — best on TV and car
+              displays where you want the entire page visible at once.
+            </p>
+          </div>
+
+          <div className="field">
+            <span className="field-label">Side panel</span>
+            <div className="segmented segmented-3">
+              <button
+                type="button"
+                className={railPanel === 'auto' ? 'active' : ''}
+                onClick={() => onRailPanelChange('auto')}
+              >
+                Auto
+              </button>
+              <button
+                type="button"
+                className={railPanel === 'on' ? 'active' : ''}
+                onClick={() => onRailPanelChange('on')}
+              >
+                Right
+              </button>
+              <button
+                type="button"
+                className={railPanel === 'off' ? 'active' : ''}
+                onClick={() => onRailPanelChange('off')}
+              >
+                Bottom
+              </button>
+            </div>
+            <p className="field-hint">
+              Puts the translation and playback controls on the right in landscape —
+              tablet, car head unit and TV. Auto enables it on wide screens.
+            </p>
+          </div>
+
+          <div className="field">
+            <span className="field-label">Interface size</span>
+            <div className="stepper">
+              <button
+                type="button"
+                aria-label="Decrease interface size"
+                disabled={uiScale <= UI_SCALE_MIN + 0.001}
+                onClick={() =>
+                  onUiScaleChange(
+                    Math.max(UI_SCALE_MIN, Number((uiScale - UI_SCALE_STEP).toFixed(2))),
+                  )
+                }
+              >
+                −
+              </button>
+              <span className="stepper-value stepper-value-sm">{Math.round(uiScale * 100)}%</span>
+              <button
+                type="button"
+                aria-label="Increase interface size"
+                disabled={uiScale >= UI_SCALE_MAX - 0.001}
+                onClick={() =>
+                  onUiScaleChange(
+                    Math.min(UI_SCALE_MAX, Number((uiScale + UI_SCALE_STEP).toFixed(2))),
+                  )
+                }
+              >
+                +
+              </button>
+            </div>
+            <p className="field-hint">
+              Scales every panel and button (not the Arabic text). Turn it down on a
+              4K TV that renders the interface oversized.
+              {isTvDetected ? ' TV detected — a smaller default was applied.' : ''}
+            </p>
+          </div>
+
+          <div className="field">
+            <span className="field-label">Remote / D-pad navigation</span>
+            <div className="segmented segmented-3">
+              <button
+                type="button"
+                className={tvNav === 'auto' ? 'active' : ''}
+                onClick={() => onTvNavChange('auto')}
+              >
+                Auto
+              </button>
+              <button
+                type="button"
+                className={tvNav === 'on' ? 'active' : ''}
+                onClick={() => onTvNavChange('on')}
+              >
+                On
+              </button>
+              <button
+                type="button"
+                className={tvNav === 'off' ? 'active' : ''}
+                onClick={() => onTvNavChange('off')}
+              >
+                Off
+              </button>
+            </div>
+            <p className="field-hint">
+              When on, arrow keys move focus between buttons and OK/Enter presses them.
+              When off, arrows step ayat (car steering-wheel behaviour).
             </p>
           </div>
 

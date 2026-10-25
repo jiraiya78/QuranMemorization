@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import { BISMILLAH } from '../data/bismillah'
 import {
   getLineDecorations,
@@ -8,17 +8,28 @@ import {
   getPageSurahNames,
   getSpecial,
   surahBannerLabel,
+  clampPage,
   type LineDecoration,
   type MushafSegment,
 } from '../data/mushaf'
 import { getSurah } from '../data/quran'
 import { toArabicIndic } from '../lib/arabicNumerals'
 import { useAyahSelectHandlers, type AyahRef } from '../lib/ayahSelect'
+import type { PageFit } from '../types'
 import { MushafPageChrome } from './MushafPageChrome'
 
 const LINE_SLOTS = 15
 const ZOOM_MIN = 0.7
 const ZOOM_MAX = 2.4
+
+/**
+ * 100% text size sits at this share of the largest size that still fits the
+ * Madani page, so the +/− control always has headroom while never spilling over
+ * the page edge.
+ */
+const FIT_BASE_RATIO = 0.86
+/** Horizontal swipe distance (px) that turns a page. */
+const SWIPE_THRESHOLD = 56
 
 interface Props {
   page: number
@@ -32,6 +43,10 @@ interface Props {
   focusSurahKey?: number
   /** Re-fit Madani lines when weight/family scale changes. */
   fitKey?: string | number
+  /** User text-size multiplier applied below the page cap. */
+  fontScale?: number
+  /** `width` scrolls a tall page; `screen` squeezes all 15 lines in at once. */
+  pageFit?: PageFit
   /** Bumped by the player on every playlist move — forces a re-centre. */
   followKey?: number
   onPageChange: (page: number) => void
@@ -178,6 +193,8 @@ export function MushafPage({
   focusSurahId = null,
   focusSurahKey = 0,
   fitKey = '',
+  fontScale = 1,
+  pageFit = 'width',
   followKey = 0,
   onPageChange,
   hideChrome = false,
@@ -186,7 +203,20 @@ export function MushafPage({
   const linesRootRef = useRef<HTMLDivElement | null>(null)
   const activeRef = useRef<HTMLElement | null>(null)
   const scrolledFocusKeyRef = useRef(0)
+  /** User-scaled base size (before pinch zoom). */
   const baseFitRef = useRef(0)
+  /** Largest size that still fits the page — the hard cap for +/−. */
+  const maxFitRef = useRef(0)
+  /** Viewport budget the current fit was measured against (width, height, text width). */
+  const fitBudgetRef = useRef({ width: -1, height: -1, text: -1 })
+  const applyScaleRef = useRef<() => void>(() => {})
+  const scaleRef = useRef(fontScale)
+  scaleRef.current = fontScale
+  const onPageChangeRef = useRef(onPageChange)
+  onPageChangeRef.current = onPageChange
+  const pageRef = useRef(page)
+  pageRef.current = page
+  const lastPageRef = useRef<number | null>(null)
   const paintedKeysRef = useRef('')
   const repaintRef = useRef<(() => void) | null>(null)
   const zoomRef = useRef(1)
@@ -216,8 +246,9 @@ export function MushafPage({
     if (!root) return
 
     const publishFittedSize = (px: number) => {
-      const reader = root.closest('.ayah-reader') as HTMLElement | null
-      if (reader) reader.style.setProperty('--mushaf-fitted-size', `${px}px`)
+      // Publish globally: the translation panel may live in the side rail,
+      // outside this reader subtree, and still needs to track the Arabic size.
+      document.documentElement.style.setProperty('--mushaf-fitted-size', `${px}px`)
     }
 
     const paintHighlights = () => {
@@ -287,86 +318,167 @@ export function MushafPage({
       return px
     }
 
-    const fit = () => {
-      const lines = [
-        ...root.querySelectorAll<HTMLElement>(
-          '.mushaf-line:not(.is-empty):not(.is-ornament)',
-        ),
-      ]
-      if (lines.length === 0) return
+    const pageLines = () => [
+      ...root.querySelectorAll<HTMLElement>(
+        '.mushaf-line:not(.is-empty):not(.is-ornament)',
+      ),
+    ]
 
-      // Measure at CSS default (zoom=1) so Madani lines stay intact.
-      root.style.fontSize = ''
-      const computed = Number.parseFloat(getComputedStyle(root).fontSize)
-      if (!Number.isFinite(computed) || computed <= 0) return
+    /** Apply the user's text-size multiplier below the fitted page cap. */
+    const applyUserScale = () => {
+      const maxFit = maxFitRef.current
+      if (maxFit <= 0) return
 
-      const narrow =
-        typeof window !== 'undefined' &&
-        window.matchMedia('(max-width: 900px) and (orientation: portrait)').matches
-      const floor = Math.max(narrow ? 9 : 11, computed * (narrow ? 0.42 : 0.55))
+      const base = Math.max(8, Math.min(maxFit, maxFit * FIT_BASE_RATIO * scaleRef.current))
+      baseFitRef.current = base
+      applySize(base, zoomRef.current)
 
-      const overflows = () =>
-        lines.some((line) => line.scrollWidth > line.clientWidth + 0.5)
-
-      let best = 0
-
-      // Fast path: most pages fit at exactly the size the previous one used, so
-      // this avoids ~10 forced reflows right when the next ayah's audio starts.
-      const previous = baseFitRef.current
-      if (previous >= floor && previous <= computed) {
-        root.style.fontSize = `${previous}px`
-        if (!overflows()) best = previous
-      }
-
-      if (best === 0) {
-        let lo = floor
-        let hi = computed
-        best = floor
-
-        root.style.fontSize = `${floor}px`
-        if (!overflows()) {
-          for (let i = 0; i < 12; i++) {
-            const mid = (lo + hi) / 2
-            root.style.fontSize = `${mid}px`
-            if (overflows()) {
-              hi = mid
-            } else {
-              best = mid
-              lo = mid
-            }
-          }
-        }
-      }
-
-      baseFitRef.current = best
-      applySize(best, zoomRef.current)
-
-      for (const line of lines) {
+      for (const line of pageLines()) {
         const fill = line.scrollWidth / Math.max(1, line.clientWidth)
         line.classList.toggle('is-full', fill >= 0.9 && zoomRef.current <= 1.01)
       }
-
-      if (viewport) {
-        viewport.classList.toggle('is-zoomed', zoomRef.current > 1.01)
-      }
+      viewport?.classList.toggle('is-zoomed', zoomRef.current > 1.01)
+      viewport?.classList.toggle('is-screen-fit', pageFit === 'screen')
 
       // Geometry changed — force a repaint of highlight bands.
       paintedKeysRef.current = ''
       paintHighlights()
     }
 
+    /**
+     * Everything the fit depends on: the viewport box, plus the root's own
+     * width (the A4 max-width is rem-based, so interface zoom changes it).
+     */
+    const fitBudget = () => ({
+      width: viewport?.clientWidth ?? root.clientWidth,
+      height: viewport?.clientHeight ?? 0,
+      text: root.clientWidth,
+    })
+
+    const fit = () => {
+      const lines = pageLines()
+      if (lines.length === 0) return
+
+      // Measure at scale 1 so the +/- control (not the CSS clamp) owns the size.
+      root.style.fontSize = ''
+      const savedScale = root.style.getPropertyValue('--font-scale')
+      root.style.setProperty('--font-scale', '1')
+      const natural = Number.parseFloat(getComputedStyle(root).fontSize)
+      if (savedScale) root.style.setProperty('--font-scale', savedScale)
+      else root.style.removeProperty('--font-scale')
+      if (!Number.isFinite(natural) || natural <= 0) return
+
+      const narrow =
+        typeof window !== 'undefined' &&
+        window.matchMedia('(max-width: 900px) and (orientation: portrait)').matches
+      const floor = Math.max(narrow ? 8 : 10, natural * 0.35)
+      const hiCap = natural * (pageFit === 'screen' ? 6 : 2.6)
+      const sheet = root.closest('.mushaf-sheet') as HTMLElement | null
+
+      const overflows = () =>
+        lines.some((line) => line.scrollWidth > line.clientWidth + 0.5)
+
+      const fitsPage = () => {
+        if (overflows()) return false
+        if (pageFit !== 'screen' || !viewport || !sheet) return true
+        return sheet.getBoundingClientRect().height <= viewport.clientHeight + 1
+      }
+
+      let best = 0
+
+      // Fast path: most pages fit at exactly the size the previous one used —
+      // but only while the space budget is unchanged, so resizing wider grows
+      // the page instead of keeping the old, smaller fit.
+      const budget = fitBudget()
+      const previous = maxFitRef.current
+      const sameBudget =
+        budget.width === fitBudgetRef.current.width &&
+        budget.height === fitBudgetRef.current.height &&
+        budget.text === fitBudgetRef.current.text
+      if (sameBudget && previous >= floor && previous <= hiCap) {
+        root.style.fontSize = `${previous}px`
+        if (fitsPage()) best = previous
+      }
+
+      if (best === 0) {
+        let lo = floor
+        let hi = hiCap
+        best = floor
+
+        root.style.fontSize = `${floor}px`
+        if (fitsPage()) {
+          for (let i = 0; i < 14; i++) {
+            const mid = (lo + hi) / 2
+            root.style.fontSize = `${mid}px`
+            if (fitsPage()) {
+              best = mid
+              lo = mid
+            } else {
+              hi = mid
+            }
+          }
+        }
+      }
+
+      maxFitRef.current = best
+      fitBudgetRef.current = budget
+      applyUserScale()
+    }
+
+    applyScaleRef.current = applyUserScale
     repaintRef.current = paintHighlights
     paintedKeysRef.current = ''
     fit()
-    const ro = new ResizeObserver(() => fit())
+
+    // Re-fit only when the width budget (or the viewport height for whole-page
+    // fit) actually changes. Watching the root's *height* would loop: fit()
+    // measures at the page cap, then applies the smaller user size, which
+    // resizes the root again.
+    let lastWidth = -1
+    let lastHeight = -1
+    let lastTextWidth = -1
+    const ro = new ResizeObserver(() => {
+      const budget = fitBudget()
+      if (
+        budget.width === lastWidth &&
+        budget.height === lastHeight &&
+        budget.text === lastTextWidth
+      ) {
+        return
+      }
+      lastWidth = budget.width
+      lastHeight = budget.height
+      lastTextWidth = budget.text
+      fit()
+    })
     ro.observe(root)
     if (viewport) ro.observe(viewport)
+
+    // Web fonts can land after mount and change the line metrics.
+    let cancelled = false
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      void document.fonts.ready.then(() => {
+        if (!cancelled) fit()
+      })
+    }
+
     return () => {
+      cancelled = true
       ro.disconnect()
       repaintRef.current = null
+      applyScaleRef.current = () => {}
     }
     // Fit runs on page/size changes only — never on every ayah step (avoids reflow jitter).
-  }, [page, pageData, decorations, fitKey])
+  }, [page, pageData, decorations, fitKey, pageFit])
+
+  /**
+   * +/− text size: re-apply below the fitted page cap without re-measuring the
+   * Madani lines, so the whole range works and nothing spills past the page.
+   */
+  useEffect(() => {
+    scaleRef.current = fontScale
+    applyScaleRef.current()
+  }, [fontScale])
 
   /** Ayah/selection changed on the same page: repaint bands only, no re-fit. */
   useEffect(() => {
@@ -380,8 +492,7 @@ export function MushafPage({
     if (!root || baseFitRef.current <= 0) return
     const px = Math.max(8, baseFitRef.current * zoom)
     root.style.fontSize = `${px}px`
-    const reader = root.closest('.ayah-reader') as HTMLElement | null
-    if (reader) reader.style.setProperty('--mushaf-fitted-size', `${px}px`)
+    document.documentElement.style.setProperty('--mushaf-fitted-size', `${px}px`)
     viewport?.classList.toggle('is-zoomed', zoom > 1.01)
 
     for (const line of root.querySelectorAll<HTMLElement>(
@@ -444,6 +555,76 @@ export function MushafPage({
     setZoom(1)
   }, [page])
 
+  /** Slide/fade the sheet in whenever the page changes (buttons, numpad or swipe). */
+  useEffect(() => {
+    const sheet = linesRootRef.current?.closest('.mushaf-sheet') as HTMLElement | null
+    const previous = lastPageRef.current
+    lastPageRef.current = page
+    if (!sheet || previous == null || previous === page) return
+    sheet.style.setProperty('--turn-dir', page > previous ? '1' : '-1')
+    sheet.classList.remove('is-turning')
+    // Force a reflow so the same animation can replay on the next turn.
+    void sheet.offsetWidth
+    sheet.classList.add('is-turning')
+  }, [page])
+
+  /** Horizontal swipe (left = next page, right = previous) with a turn animation. */
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    let tracking = false
+    let startX = 0
+    let startY = 0
+    let dx = 0
+    let dy = 0
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) {
+        tracking = false
+        return
+      }
+      tracking = true
+      startX = e.touches[0]!.clientX
+      startY = e.touches[0]!.clientY
+      dx = 0
+      dy = 0
+    }
+
+    const onMove = (e: TouchEvent) => {
+      if (!tracking || e.touches.length !== 1) return
+      dx = e.touches[0]!.clientX - startX
+      dy = e.touches[0]!.clientY - startY
+    }
+
+    const finish = () => {
+      if (!tracking) return
+      tracking = false
+      // While pinch-zoomed the viewport scrolls sideways instead of turning pages.
+      if (zoomRef.current > 1.01) return
+      if (Math.abs(dx) < SWIPE_THRESHOLD) return
+      if (Math.abs(dx) < Math.abs(dy) * 1.6) return
+      const target = clampPage(pageRef.current + (dx < 0 ? 1 : -1))
+      if (target === pageRef.current) return
+      onPageChangeRef.current(target)
+    }
+
+    const cancel = () => {
+      tracking = false
+    }
+
+    viewport.addEventListener('touchstart', onStart, { passive: true })
+    viewport.addEventListener('touchmove', onMove, { passive: true })
+    viewport.addEventListener('touchend', finish)
+    viewport.addEventListener('touchcancel', cancel)
+    return () => {
+      viewport.removeEventListener('touchstart', onStart)
+      viewport.removeEventListener('touchmove', onMove)
+      viewport.removeEventListener('touchend', finish)
+      viewport.removeEventListener('touchcancel', cancel)
+    }
+  }, [])
+
   /** After next/prev surah, pin the viewport to that surah's banner (once per focus key). */
   useEffect(() => {
     if (focusSurahId == null || focusSurahKey <= 0) return
@@ -484,10 +665,26 @@ export function MushafPage({
    * the sheet edges (top at the start of the page, bottom at the end). While the
    * Basmala plays there is no ayah highlight, so aim at the surah header instead.
    */
+  /** Page/ayah pair seen by the follow effect, to tell manual turns from playback. */
+  const followSeenRef = useRef({ page, surah: activeSurahId, ayah: activeAyah })
+
   useEffect(() => {
     const root = linesRootRef.current
     const viewport = viewportRef.current
     if (!root || !viewport) return
+
+    const seen = followSeenRef.current
+    const expectedPage = getPageForAyah(activeSurahId, activeAyah)
+    const manualTurn =
+      seen.page !== page && seen.surah === activeSurahId && seen.ayah === activeAyah
+    followSeenRef.current = { page, surah: activeSurahId, ayah: activeAyah }
+
+    // Manual page turn / numpad jump: open at the top instead of yanking the
+    // view back to the reciting ayah (which may not even be on this page).
+    if (page !== expectedPage) {
+      if (manualTurn) viewport.scrollTo({ top: 0 })
+      return
+    }
 
     const id = window.requestAnimationFrame(() => {
       // The Basmala has no ayah highlight, so its "target" is the surah header.

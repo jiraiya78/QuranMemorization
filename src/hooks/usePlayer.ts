@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { buildPlaylist } from '../lib/playlist'
 import { getPlayableUrl } from '../lib/offlineCache'
+import { BISMILLAH_AYAH } from '../data/bismillah'
+import { getAyahsOnPage, getPageForAyah } from '../data/mushaf'
 import type { PhysicalNav, RepeatMode } from '../types'
 
 /** Silence between ayahs. Kept short — the next source is preloaded while the current one plays. */
@@ -16,8 +18,18 @@ interface UsePlayerOptions {
   pageNumber: number
   reciterId: string
   physicalNav: PhysicalNav
+  /** TV D-pad focus navigation owns the arrow keys. */
+  remoteNav?: boolean
   onSurahPrev?: () => void
   onSurahNext?: () => void
+  /** Page Up/Down or TV channel keys. */
+  onPagePrev?: () => void
+  onPageNext?: () => void
+  /**
+   * Start a page whose ayahs are not in the current queue (the user browsed into
+   * another surah). App retargets surah/range and calls `playFrom`.
+   */
+  onPlayPage?: (surahId: number, ayah: number) => void
   onToast?: (message: string) => void
 }
 
@@ -44,8 +56,12 @@ export function usePlayer({
   pageNumber,
   reciterId,
   physicalNav,
+  remoteNav = false,
   onSurahPrev,
   onSurahNext,
+  onPagePrev,
+  onPageNext,
+  onPlayPage,
   onToast,
 }: UsePlayerOptions) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -58,6 +74,10 @@ export function usePlayer({
   const warmRef = useRef<HTMLAudioElement | null>(null)
   /** Page number only affects playlist in `page` mode — otherwise page nav must not reset playback. */
   const playlistPage = mode === 'page' ? pageNumber : 1
+  /** Identity of the queue: a page turn (page mode) produces a different scope. */
+  const scopeKey = [mode, surahId, versesCount, repeats, rangeFrom, rangeTo, playlistPage].join('|')
+  const scopeKeyRef = useRef(scopeKey)
+  scopeKeyRef.current = scopeKey
   const playlistRef = useRef(
     buildPlaylist({
       surahId,
@@ -69,14 +89,25 @@ export function usePlayer({
       pageNumber: playlistPage,
     }),
   )
+  /** Scope the current playlist was built for. */
+  const playlistScopeRef = useRef(scopeKey)
+  /** Scope the track currently loaded in the audio element belongs to (null = nothing loaded). */
+  const audioScopeRef = useRef<string | null>(null)
+  /** Madani page the loaded track sits on — Play re-targets the browsed page. */
+  const audioPageRef = useRef<number | null>(null)
   const playingRef = useRef(false)
   const gapTimerRef = useRef<number | null>(null)
   const physicalNavRef = useRef(physicalNav)
   const onSurahPrevRef = useRef(onSurahPrev)
   const onSurahNextRef = useRef(onSurahNext)
+  const onPlayPageRef = useRef(onPlayPage)
+  /** Page on screen — Play starts recitation here, not wherever it last stopped. */
+  const pageNumberRef = useRef(pageNumber)
   physicalNavRef.current = physicalNav
   onSurahPrevRef.current = onSurahPrev
   onSurahNextRef.current = onSurahNext
+  onPlayPageRef.current = onPlayPage
+  pageNumberRef.current = pageNumber
 
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentAyah, setCurrentAyah] = useState(0)
@@ -86,6 +117,8 @@ export function usePlayer({
   /** Bumped on every playlist move so the reader re-centres even for a repeated ayah. */
   const [followKey, setFollowKey] = useState(0)
   const [playlistLength, setPlaylistLength] = useState(playlistRef.current.length)
+  /** True while a source is loaded — the Stop control is only useful then. */
+  const [isLoaded, setIsLoaded] = useState(false)
 
   const revokeObjectUrls = () => {
     for (const u of objectUrlsRef.current) URL.revokeObjectURL(u)
@@ -119,9 +152,10 @@ export function usePlayer({
       rangeTo,
       pageNumber: playlistPage,
     })
+    playlistScopeRef.current = scopeKey
     clearPreload()
     setPlaylistLength(playlistRef.current.length)
-  }, [mode, playlistPage, rangeFrom, rangeTo, repeats, surahId, versesCount])
+  }, [mode, playlistPage, rangeFrom, rangeTo, repeats, scopeKey, surahId, versesCount])
 
   const syncMeta = useCallback((index: number) => {
     const item = playlistRef.current[index]
@@ -198,6 +232,9 @@ export function usePlayer({
         if (!preloaded && url.startsWith('blob:')) objectUrlsRef.current.push(url)
         audio.src = url
         audio.load()
+        audioScopeRef.current = playlistScopeRef.current
+        audioPageRef.current = getPageForAyah(item.surahId, item.ayah)
+        setIsLoaded(true)
 
         if (shouldPlay) {
           await audio.play()
@@ -223,6 +260,10 @@ export function usePlayer({
   )
 
   useEffect(() => {
+    // Never swap the queue under a track that is currently sounding: flipping to
+    // another page must not make the running recitation jump to that page's ayah
+    // list. The new page is picked up by `play`/`resume` (and by `stop`) instead.
+    if (playingRef.current) return
     rebuildPlaylist()
     indexRef.current = 0
     syncMeta(0)
@@ -263,10 +304,54 @@ export function usePlayer({
     }
   }, [goTo, onToast])
 
+  /**
+   * First playlist index printed on `page`, or -1 when the page is not in the
+   * current queue. The Basmala that opens the surah is kept so a page never
+   * starts mid-flow.
+   */
+  const firstIndexOnPage = useCallback((page: number): number => {
+    const list = playlistRef.current
+    for (const target of getAyahsOnPage(page)) {
+      let idx = list.findIndex(
+        (item) => item.surahId === target.surahId && item.ayah === target.ayah,
+      )
+      if (idx < 0) continue
+      // Prefer the first repeat of that ayah.
+      while (idx > 0) {
+        const prev = list[idx - 1]
+        if (prev && prev.surahId === target.surahId && prev.ayah === target.ayah) idx -= 1
+        else break
+      }
+      const item = list[idx]
+      const head = idx > 0 ? list[idx - 1] : undefined
+      if (item && head && head.ayah === BISMILLAH_AYAH && head.surahId === item.surahId) {
+        idx -= 1
+      }
+      return idx
+    }
+    return -1
+  }, [])
+
+  /** Ask App to retarget surah/range for a page outside the queue. */
+  const requestBrowsedPage = useCallback((): boolean => {
+    const first = getAyahsOnPage(pageNumberRef.current)[0]
+    const request = onPlayPageRef.current
+    if (!first || !request) return false
+    request(first.surahId, first.ayah)
+    return true
+  }, [])
+
+  /** Play the page on screen (falls back to the top of the queue). */
   const play = useCallback(() => {
     rebuildPlaylist()
+    const browsedIndex = firstIndexOnPage(pageNumberRef.current)
+    if (browsedIndex >= 0) {
+      void goTo(browsedIndex, true)
+      return
+    }
+    if (requestBrowsedPage()) return
     void goTo(0, true)
-  }, [goTo, rebuildPlaylist])
+  }, [firstIndexOnPage, goTo, rebuildPlaylist, requestBrowsedPage])
 
   /** Start (or restart) from a specific ayah in the current playlist. */
   const playFrom = useCallback(
@@ -303,10 +388,32 @@ export function usePlayer({
     audioRef.current?.pause()
   }, [])
 
+  /**
+   * Play what the user is looking at. If the loaded track sits on another page
+   * (or in a queue the user navigated away from), start from the top of the
+   * browsed page instead of resurrecting the old one.
+   */
   const resume = useCallback(() => {
+    const browsed = pageNumberRef.current
+    const browsedIndex = firstIndexOnPage(browsed)
+    if (audioPageRef.current !== browsed) {
+      if (browsedIndex >= 0) {
+        void goTo(browsedIndex, true)
+        return
+      }
+      if (requestBrowsedPage()) return
+    }
+    if (audioScopeRef.current !== scopeKeyRef.current) {
+      rebuildPlaylist()
+      const index = firstIndexOnPage(browsed)
+      indexRef.current = Math.max(0, index)
+      void goTo(Math.max(0, index), true)
+      return
+    }
     const audio = audioRef.current
     if (!audio?.src || audio.error || audio.ended) {
-      void goTo(indexRef.current, true)
+      // Finished queue: start the browsed page over, not its last ayah.
+      void goTo(browsedIndex >= 0 ? browsedIndex : 0, true)
       return
     }
     playingRef.current = true
@@ -315,7 +422,7 @@ export function usePlayer({
       // After skip-while-paused, some browsers need a fresh load
       void goTo(indexRef.current, true)
     })
-  }, [goTo])
+  }, [firstIndexOnPage, goTo, rebuildPlaylist, requestBrowsedPage])
 
   const toggle = useCallback(() => {
     if (isPlaying) pause()
@@ -340,44 +447,113 @@ export function usePlayer({
       audioRef.current.load()
     }
     revokeObjectUrls()
-    indexRef.current = 0
-    syncMeta(0)
-  }, [pause, syncMeta])
+    audioScopeRef.current = null
+    audioPageRef.current = null
+    setIsLoaded(false)
+    // Point the idle queue at whatever is on screen, so the very next Play press
+    // starts the browsed page rather than something played earlier.
+    rebuildPlaylist()
+    const browsedIndex = firstIndexOnPage(pageNumberRef.current)
+    indexRef.current = Math.max(0, browsedIndex)
+    syncMeta(Math.max(0, browsedIndex))
+  }, [firstIndexOnPage, pause, rebuildPlaylist, syncMeta])
 
-  // Keyboard + Media Session (car / headset physical buttons)
+  // Physical buttons: car steering wheel / headset / TV remote.
+  //
+  // Registered ONCE. Re-registering Media Session handlers on every play/pause
+  // (they used to depend on `toggle`/`next` identities) is what made steering
+  // wheel and Bluetooth buttons stop responding after the surah/ayah switch was
+  // added — some car browsers drop the handler when it is replaced mid-track.
+  // Everything is read through refs so the listeners never churn.
+  const controlsRef = useRef({ next, prev, toggle, play, resume, pause, stop })
+  controlsRef.current = { next, prev, toggle, play, resume, pause, stop }
+  const remoteNavRef = useRef(remoteNav)
+  remoteNavRef.current = remoteNav
+  const onPagePrevRef = useRef(onPagePrev)
+  const onPageNextRef = useRef(onPageNext)
+  onPagePrevRef.current = onPagePrev
+  onPageNextRef.current = onPageNext
+
   useEffect(() => {
     const physicalNext = () => {
+      const controls = controlsRef.current
       if (physicalNavRef.current === 'surah') onSurahNextRef.current?.()
-      else next()
+      else controls.next()
     }
     const physicalPrev = () => {
+      const controls = controlsRef.current
       if (physicalNavRef.current === 'surah') onSurahPrevRef.current?.()
-      else prev()
+      else controls.prev()
     }
+    const physicalToggle = () => {
+      const controls = controlsRef.current
+      if (playingRef.current) controls.pause()
+      else if (audioRef.current?.src) controls.resume()
+      else controls.play()
+    }
+
+    const isTypingTarget = (target: HTMLElement | null) =>
+      Boolean(
+        target &&
+          (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.isContentEditable),
+      )
 
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT' ||
-          target.isContentEditable)
-      ) {
+      if (isTypingTarget(target)) return
+
+      const code = e.code || ''
+      const key = e.key || ''
+      // Space/Enter on a focused control should activate it, not double-fire here.
+      const onButton =
+        target?.closest('button, [role="button"], a[href]') != null &&
+        (code === 'Space' || key === ' ' || code === 'Enter' || key === 'Enter')
+
+      if (code === 'Space' || key === ' ' || code === 'MediaPlayPause' || key === 'MediaPlayPause') {
+        if (onButton) return
+        e.preventDefault()
+        physicalToggle()
         return
       }
 
-      if (e.code === 'Space' || e.code === 'MediaPlayPause') {
-        e.preventDefault()
-        toggle()
-        return
-      }
-      if (e.code === 'ArrowRight' || e.code === 'ArrowDown' || e.code === 'MediaTrackNext') {
+      if (code === 'MediaTrackNext' || key === 'MediaTrackNext') {
         e.preventDefault()
         physicalNext()
         return
       }
-      if (e.code === 'ArrowLeft' || e.code === 'ArrowUp' || e.code === 'MediaTrackPrevious') {
+      if (code === 'MediaTrackPrevious' || key === 'MediaTrackPrevious') {
+        e.preventDefault()
+        physicalPrev()
+        return
+      }
+
+      // TV remotes: channel keys and Page Up/Down flip Madani pages.
+      const inDialog = target?.closest('[role="dialog"]') != null
+      if (inDialog) return
+
+      if (code === 'PageDown' || key === 'PageDown' || code === 'ChannelDown' || key === 'ChannelDown') {
+        e.preventDefault()
+        onPageNextRef.current?.()
+        return
+      }
+      if (code === 'PageUp' || key === 'PageUp' || code === 'ChannelUp' || key === 'ChannelUp') {
+        e.preventDefault()
+        onPagePrevRef.current?.()
+        return
+      }
+
+      // Arrow keys drive D-pad focus navigation on TV; on car head units they
+      // step ayat. Leave them alone when spatial navigation owns the arrows.
+      if (remoteNavRef.current) return
+      if (code === 'ArrowRight' || code === 'ArrowDown') {
+        e.preventDefault()
+        physicalNext()
+        return
+      }
+      if (code === 'ArrowLeft' || code === 'ArrowUp') {
         e.preventDefault()
         physicalPrev()
       }
@@ -385,38 +561,41 @@ export function usePlayer({
 
     window.addEventListener('keydown', onKeyDown)
 
-    const ms = navigator.mediaSession
+    const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : null
+    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = ms
+      ? [
+          ['play', () => physicalToggle()],
+          ['pause', () => controlsRef.current.pause()],
+          ['stop', () => controlsRef.current.stop()],
+          ['previoustrack', () => physicalPrev()],
+          ['nexttrack', () => physicalNext()],
+        ]
+      : []
+
     if (ms) {
-      try {
-        ms.setActionHandler('play', () => {
-          if (playingRef.current) return
-          if (audioRef.current?.src) resume()
-          else play()
-        })
-        ms.setActionHandler('pause', () => {
-          if (playingRef.current) pause()
-        })
-        ms.setActionHandler('previoustrack', () => physicalPrev())
-        ms.setActionHandler('nexttrack', () => physicalNext())
-      } catch {
-        // Some browsers reject unsupported handlers
+      for (const [action, handler] of handlers) {
+        try {
+          ms.setActionHandler(action, handler)
+        } catch {
+          // Some browsers reject unsupported actions — keep the rest registered.
+        }
       }
     }
 
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       if (ms) {
-        try {
-          ms.setActionHandler('play', null)
-          ms.setActionHandler('pause', null)
-          ms.setActionHandler('previoustrack', null)
-          ms.setActionHandler('nexttrack', null)
-        } catch {
-          // ignore
+        for (const [action] of handlers) {
+          try {
+            ms.setActionHandler(action, null)
+          } catch {
+            // ignore
+          }
         }
       }
     }
-  }, [next, pause, play, prev, resume, toggle])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!navigator.mediaSession) return
@@ -425,6 +604,8 @@ export function usePlayer({
 
   return {
     isPlaying,
+    /** A source is loaded, so Stop has something to clear. */
+    isLoaded,
     currentAyah,
     currentSurahId,
     repeatIndex,

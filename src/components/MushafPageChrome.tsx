@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { MUSHAF_PAGE_COUNT, clampPage } from '../data/mushaf'
+import { PageJumpDialog } from './PageJumpDialog'
 
 interface Props {
   page: number
@@ -15,6 +17,8 @@ export function MushafPageChrome({
   onPageChange,
   compact = false,
 }: Props) {
+  const [jumpOpen, setJumpOpen] = useState(false)
+
   return (
     <div className={`mushaf-page-chrome${compact ? ' is-compact' : ''}`}>
       <button
@@ -27,9 +31,16 @@ export function MushafPageChrome({
         ‹
       </button>
       <div className="mushaf-page-meta">
-        <span className="mushaf-page-number">
+        <button
+          type="button"
+          className="mushaf-page-number is-button"
+          aria-haspopup="dialog"
+          aria-label={`Page ${page} of ${MUSHAF_PAGE_COUNT} — jump to page`}
+          title="Jump to page"
+          onClick={() => setJumpOpen(true)}
+        >
           Page {page} / {MUSHAF_PAGE_COUNT}
-        </span>
+        </button>
         {rangeLabel ? (
           <span className="mushaf-page-limits" title={surahNames}>
             {rangeLabel}
@@ -46,6 +57,17 @@ export function MushafPageChrome({
       >
         ›
       </button>
+
+      {jumpOpen ? (
+        <PageJumpDialog
+          current={page}
+          onClose={() => setJumpOpen(false)}
+          onSubmit={(target) => {
+            setJumpOpen(false)
+            onPageChange(target)
+          }}
+        />
+      ) : null}
     </div>
   )
 }

@@ -1221,7 +1221,15 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
 
 .floating-translation p {
   margin: 0;
-  font-size: max(0.9rem, calc(var(--mushaf-fitted-size, 1.15rem) * 0.55));
+  /* Follows the +/− text control (via --font-scale) and the fitted Arabic size,
+     but never grows past the Arabic it translates. */
+  font-size: min(
+    calc(var(--mushaf-fitted-size, 1.15rem) * 0.9),
+    max(
+      calc(0.85rem * var(--font-scale, 1)),
+      calc(var(--mushaf-fitted-size, 1.15rem) * 0.55)
+    )
+  );
   line-height: 1.5;
   color: var(--text);
 }
@@ -1582,7 +1590,13 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   }
 
   .floating-translation p {
-    font-size: max(0.95rem, calc(var(--mushaf-fitted-size, 1.2rem) * 0.56));
+    font-size: min(
+      calc(var(--mushaf-fitted-size, 1.2rem) * 0.9),
+      max(
+        calc(0.9rem * var(--font-scale, 1)),
+        calc(var(--mushaf-fitted-size, 1.2rem) * 0.55)
+      )
+    );
   }
 }
 
@@ -1683,7 +1697,13 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   }
 
   .floating-translation p {
-    font-size: max(1rem, calc(var(--mushaf-fitted-size, 1.35rem) * 0.58));
+    font-size: min(
+      calc(var(--mushaf-fitted-size, 1.35rem) * 0.9),
+      max(
+        calc(0.95rem * var(--font-scale, 1)),
+        calc(var(--mushaf-fitted-size, 1.35rem) * 0.55)
+      )
+    );
     line-height: 1.45;
   }
 }
@@ -1805,5 +1825,395 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
   .chrome-btn:active:not(:disabled),
   .theme-swatch:active {
     transform: none;
+  }
+}
+
+/* ==========================================================================
+   Page turns, side rail, numpad jump, TV remote focus
+   ========================================================================== */
+
+/* Slide/fade used for swipe and button page turns (direction set in JS). */
+.mushaf-sheet.is-turning {
+  animation: mushaf-page-turn 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes mushaf-page-turn {
+  from {
+    opacity: 0.35;
+    transform: translateX(calc(var(--turn-dir, 1) * -7%));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Whole-page fit: the Madani page is squeezed into the viewport, no scrolling. */
+.mushaf-viewport.is-screen-fit {
+  overflow: hidden;
+}
+
+.mushaf-viewport.is-screen-fit .mushaf-sheet {
+  height: 100%;
+}
+
+/* Trip the browser's native horizontal swipe-back/forward navigation. */
+.mushaf-viewport {
+  overscroll-behavior-x: contain;
+}
+
+/* Page number acts as a "jump to page" button. */
+.mushaf-page-number.is-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--control);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 34px;
+}
+
+.mushaf-page-number.is-button:hover {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+}
+
+.mushaf-page-number.is-button::after {
+  content: '#';
+  font-size: 0.75em;
+  color: var(--text-muted);
+}
+
+/* ---- Jump to page numpad ------------------------------------------------ */
+
+.page-jump-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.page-jump {
+  width: min(100%, 24rem);
+  max-height: 94dvh;
+  overflow: auto;
+  padding: 1rem 1.1rem 1.1rem;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.page-jump-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.page-jump-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.page-jump-close {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--control);
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.page-jump-display {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--control);
+}
+
+.page-jump-value {
+  font-size: clamp(2rem, 8vw, 2.8rem);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-jump-of {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+.page-jump-arabic {
+  margin: 0;
+  text-align: center;
+  font-family: var(--arabic-font);
+  font-size: 1.4rem;
+  color: var(--text-muted);
+  min-height: 1.6em;
+}
+
+.page-jump-pad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.page-jump-key {
+  min-height: 56px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--control);
+  color: var(--text);
+  font-size: 1.4rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 90ms ease, border-color 120ms ease;
+}
+
+.page-jump-key.is-aux {
+  font-size: 1.1rem;
+  color: var(--text-muted);
+}
+
+.page-jump-key:active {
+  transform: scale(0.96);
+}
+
+.page-jump-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+}
+
+.page-jump-actions .btn {
+  min-height: 52px;
+  font-size: 1.05rem;
+}
+
+.page-jump-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ---- Landscape / TV right rail ----------------------------------------- */
+
+.reader-pane.has-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(15rem, 24vw, 23rem);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+}
+
+.reader-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.reader-main > .ayah-reader {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.reader-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 0;
+  min-height: 0;
+  padding: 0.9rem 0.9rem 1rem;
+  border-left: 1px solid var(--border);
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+
+.floating-translation.is-rail {
+  flex: 1 1 auto;
+  margin: 0;
+  max-height: none;
+  min-height: 0;
+  border-radius: 14px;
+  background: var(--control);
+  box-shadow: none;
+}
+
+.floating-translation.is-rail.is-expanded {
+  max-height: none;
+}
+
+.floating-translation.is-rail .floating-translation-body {
+  flex: 1 1 auto;
+}
+
+.floating-translation.is-rail .floating-translation-body p {
+  font-size: min(
+    calc(var(--mushaf-fitted-size, 1.3rem) * 0.9),
+    max(
+      calc(0.88rem * var(--font-scale, 1)),
+      calc(var(--mushaf-fitted-size, 1.3rem) * 0.55)
+    )
+  );
+  line-height: 1.55;
+}
+
+/* Stop is a quieter command than Play: outlined, square glyph, muted chrome. */
+.ctrl.ctrl-stop {
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.ctrl.ctrl-stop .ctrl-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.ctrl.ctrl-stop:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* Six controls (Stop added) must fit a phone width without shoving the dock */
+@media (max-width: 480px) {
+  .dock-controls {
+    gap: 0.35rem;
+  }
+
+  .ctrl.ctrl-stop {
+    width: 32px;
+    height: 32px;
+  }
+
+  .ctrl.ctrl-stop .ctrl-icon {
+    width: 0.85rem;
+    height: 0.85rem;
+  }
+}
+
+.player-dock.is-rail {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  margin-top: auto;
+}
+
+.player-dock.is-rail .dock-stat {
+  flex: 0 0 auto;
+  text-align: center;
+  font-size: 0.82rem;
+}
+
+.player-dock.is-rail .dock-controls {
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.player-dock.is-rail .ctrl {
+  width: 56px;
+  height: 56px;
+}
+
+.player-dock.is-rail .ctrl-stop {
+  width: 46px;
+  height: 46px;
+}
+
+.player-dock.is-rail .ctrl-surah {
+  width: 50px;
+  height: 50px;
+}
+
+.player-dock.is-rail .ctrl-main {
+  width: 66px;
+  height: 66px;
+}
+
+@media (max-width: 1200px) {
+  .player-dock.is-rail .ctrl {
+    width: 48px;
+    height: 48px;
+  }
+
+  .player-dock.is-rail .ctrl-surah {
+    width: 44px;
+    height: 44px;
+  }
+
+  .player-dock.is-rail .ctrl-main {
+    width: 58px;
+    height: 58px;
+  }
+}
+
+/* ---- TV / remote focus -------------------------------------------------- */
+
+.is-tv-nav :focus-visible,
+.is-tv-nav button:focus,
+.is-tv-nav select:focus,
+.is-tv-nav [tabindex]:focus {
+  outline: 3px solid color-mix(in srgb, var(--accent) 85%, white);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+
+.is-tv-nav .ctrl:focus,
+.is-tv-nav .page-jump-key:focus {
+  outline-offset: 4px;
+}
+
+/* Remote users need the focused control to be obvious — no subtle rings. */
+.is-tv-nav .segmented button:focus,
+.is-tv-nav .theme-swatch:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mushaf-sheet.is-turning {
+    animation: none;
+  }
+}
+
+/* Screen fit: no scroll at all, so drop the viewport's vertical padding. */
+.mushaf-viewport.is-screen-fit {
+  padding-block: 0.05rem;
+}
+
+/* Wide screens (TV / desktop): a slightly larger settings sheet stays usable. */
+@media (min-width: 1400px) {
+  .settings-modal {
+    width: min(100%, 32rem);
+    max-height: min(88vh, 48rem);
   }
 }

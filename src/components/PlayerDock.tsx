@@ -6,34 +6,43 @@ import {
   IconPlay,
   IconPrev,
   IconPrevSurah,
+  IconStop,
 } from './TransportIcons'
 
 interface Props {
   isPlaying: boolean
+  /** A source is loaded and Stop can clear it. */
+  canStop?: boolean
   currentAyah: number
   versesCount: number
   repeatIndex: number
   totalRepeats: number
   canPrevSurah: boolean
   canNextSurah: boolean
+  /** `rail` stacks the controls vertically inside the side panel. */
+  variant?: 'bar' | 'rail'
   onPrev: () => void
   onToggle: () => void
   onNext: () => void
+  onStop: () => void
   onPrevSurah: () => void
   onNextSurah: () => void
 }
 
 export function PlayerDock({
   isPlaying,
+  canStop = false,
   currentAyah,
   versesCount,
   repeatIndex,
   totalRepeats,
   canPrevSurah,
   canNextSurah,
+  variant = 'bar',
   onPrev,
   onToggle,
   onNext,
+  onStop,
   onPrevSurah,
   onNextSurah,
 }: Props) {
@@ -42,7 +51,7 @@ export function PlayerDock({
     : `Ayah ${currentAyah} / ${versesCount}`
 
   return (
-    <footer className="player-dock">
+    <footer className={`player-dock is-${variant}`}>
       <span className="dock-stat">
         Repeat {repeatIndex} / {totalRepeats}
       </span>
@@ -69,6 +78,16 @@ export function PlayerDock({
         </button>
         <button type="button" className="ctrl" aria-label="Next ayah" onClick={onNext}>
           <IconNext />
+        </button>
+        <button
+          type="button"
+          className="ctrl ctrl-stop"
+          aria-label="Stop"
+          title="Stop playback"
+          disabled={!canStop}
+          onClick={onStop}
+        >
+          <IconStop />
         </button>
         <button
           type="button"

@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { getBismillah, isBismillah } from '../data/bismillah'
-import { getAyahs, getTranslationLabel } from '../data/quran'
+import { getTranslationLabel } from '../data/quran'
 import { getPageForAyah, pageHasSurah } from '../data/mushaf'
+import { getActiveTranslation } from '../lib/activeTranslation'
 import { useAyahSelectHandlers, type AyahRef } from '../lib/ayahSelect'
-import type { Ayah, DisplayMode, TranslationId } from '../types'
+import type { Ayah, DisplayMode, PageFit, TranslationId } from '../types'
 import { MushafPage, useMushafPageMeta } from './MushafPage'
 import { MushafPageChrome } from './MushafPageChrome'
+import { TranslationPanel } from './TranslationPanel'
 
 interface Props {
   ayahs: Ayah[]
@@ -24,10 +26,14 @@ interface Props {
   focusSurahId?: number | null
   focusSurahKey?: number
   fitKey?: string | number
+  fontScale?: number
+  pageFit?: PageFit
   /** Bumped by the player on every playlist move — forces a re-centre. */
   followKey?: number
   chromeInHeader?: boolean
   headerActions?: ReactNode
+  /** The side rail owns the translation panel. */
+  hideTranslationPanel?: boolean
 }
 
 function AyahListItem({
@@ -94,15 +100,16 @@ export function AyahReader({
   focusSurahId = null,
   focusSurahKey = 0,
   fitKey = '',
+  fontScale = 1,
+  pageFit = 'width',
   followKey = 0,
   chromeInHeader = false,
   headerActions,
+  hideTranslationPanel = false,
 }: Props) {
   const activeRef = useRef<HTMLElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const listFocusKeyRef = useRef(0)
-  const translationBodyRef = useRef<HTMLDivElement | null>(null)
-  const [translationExpanded, setTranslationExpanded] = useState(false)
   const setActiveNode = (node: HTMLElement | null) => {
     activeRef.current = node
   }
@@ -157,46 +164,14 @@ export function AyahReader({
   }, [activeAyah, activeSurahId, displayMode, focusSurahKey, surahId, followKey])
 
   /** New ayah starts collapsed again — long translations stay in their 1/4-screen box. */
-  useEffect(() => {
-    setTranslationExpanded(false)
-    translationBodyRef.current?.scrollTo({ top: 0 })
-  }, [activeAyah, activeSurahId, translationId])
-
-  const activeTranslation = useMemo(() => {
-    if (isBismillah(activeAyah)) return bismillah.translation
-    const list =
-      activeSurahId === surahId ? ayahs : getAyahs(activeSurahId, translationId)
-    return list.find((a) => a.number === activeAyah)?.translation ?? ''
-  }, [activeAyah, activeSurahId, ayahs, bismillah.translation, surahId, translationId])
+  const activeTranslation = useMemo(
+    () =>
+      getActiveTranslation({ activeAyah, activeSurahId, surahId, ayahs, translationId }),
+    [activeAyah, activeSurahId, ayahs, surahId, translationId],
+  )
 
   const pageMeta = useMushafPageMeta(pageNumber)
-  const showFloating = displayMode === 'mushaf' && showTranslation
-
-  /**
-   * Flag the translation body only while text is clipped below, so the bottom
-   * fade is a real "more below" hint instead of dimming a line that fits.
-   */
-  useEffect(() => {
-    const body = translationBodyRef.current
-    if (!body || !showFloating) return
-
-    const sync = () => {
-      const overflowing = body.scrollHeight - body.clientHeight > 2
-      const atEnd = body.scrollTop + body.clientHeight >= body.scrollHeight - 2
-      body.classList.toggle('is-scrollable', overflowing)
-      body.classList.toggle('is-at-end', atEnd)
-    }
-
-    sync()
-    body.addEventListener('scroll', sync, { passive: true })
-    const ro = new ResizeObserver(sync)
-    ro.observe(body)
-    if (body.firstElementChild) ro.observe(body.firstElementChild)
-    return () => {
-      body.removeEventListener('scroll', sync)
-      ro.disconnect()
-    }
-  }, [showFloating, activeTranslation, translationExpanded, translationId, activeAyah])
+  const showFloating = displayMode === 'mushaf' && showTranslation && !hideTranslationPanel
 
   return (
     <div
@@ -232,6 +207,8 @@ export function AyahReader({
             focusSurahId={focusSurahId}
             focusSurahKey={focusSurahKey}
             fitKey={fitKey}
+            fontScale={fontScale}
+            pageFit={pageFit}
             followKey={followKey}
             onPageChange={onPageChange}
             hideChrome={chromeInHeader}
@@ -273,31 +250,11 @@ export function AyahReader({
       </div>
 
       {showFloating && activeTranslation ? (
-        <aside
-          className={`floating-translation${translationExpanded ? ' is-expanded' : ''}`}
-          dir="ltr"
-          aria-live="polite"
-        >
-          <div className="floating-translation-head">
-            <span className="floating-translation-label">Translation</span>
-            <div className="floating-translation-tools">
-              <span className="floating-translation-credit">{translationLabel}</span>
-              <button
-                type="button"
-                className="floating-translation-toggle"
-                aria-expanded={translationExpanded}
-                aria-label={translationExpanded ? 'Shrink translation' : 'Expand translation'}
-                title={translationExpanded ? 'Shrink' : 'Expand'}
-                onClick={() => setTranslationExpanded((v) => !v)}
-              >
-                {translationExpanded ? '▾' : '▴'}
-              </button>
-            </div>
-          </div>
-          <div className="floating-translation-body" ref={translationBodyRef}>
-            <p>{activeTranslation}</p>
-          </div>
-        </aside>
+        <TranslationPanel
+          text={activeTranslation}
+          credit={translationLabel}
+          resetKey={`${activeSurahId}:${activeAyah}:${translationId}`}
+        />
       ) : null}
     </div>
   )

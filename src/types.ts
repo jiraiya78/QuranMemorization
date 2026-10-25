@@ -22,6 +22,15 @@ export type PhysicalNav = 'ayah' | 'surah'
  */
 export type MushafWidth = 'auto' | 'a4' | 'full'
 
+/** How the Madani page fills its viewport. */
+export type PageFit = 'width' | 'screen'
+
+/** Right-hand rail holding translation + transport controls. */
+export type RailPanel = 'auto' | 'on' | 'off'
+
+/** TV / remote (D-pad) navigation. */
+export type TvNav = 'auto' | 'on' | 'off'
+
 export interface SurahMeta {
   id: number
   nameArabic: string
@@ -67,6 +76,14 @@ export interface AppPrefs {
   physicalNav: PhysicalNav
   /** Cap mushaf page width (A4-like) or stretch full. */
   mushafWidth: MushafWidth
+  /** Fit the page to width (scrolls) or squeeze all 15 lines into the screen. */
+  pageFit: PageFit
+  /** Translation + transport controls docked on the right for wide screens. */
+  railPanel: RailPanel
+  /** Arrow keys move focus between controls instead of stepping ayat. */
+  tvNav: TvNav
+  /** Interface zoom (rem scale) — 0.7–1.4. Useful on TV / large displays. */
+  uiScale: number
 }
 
 export type DownloadStatus = 'idle' | 'downloading' | 'ready' | 'error'

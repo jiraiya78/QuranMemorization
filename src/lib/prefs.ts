@@ -3,13 +3,17 @@ import type {
   DisplayMode,
   FontWeight,
   MushafWidth,
+  PageFit,
   PhysicalNav,
+  RailPanel,
   RepeatMode,
   TranslationId,
+  TvNav,
 } from '../types'
 import { RECITERS } from '../data/reciters'
 import { MUSHAF_PAGE_COUNT } from '../data/mushaf'
 import { getSurah } from '../data/quran'
+import { looksLikeTv } from './device'
 
 const KEY = 'recitehelper.prefs.v1'
 const PORTRAIT_MOBILE_MQ = '(max-width: 900px) and (orientation: portrait)'
@@ -18,10 +22,19 @@ export const FONT_SCALE_MIN = 0.8
 export const FONT_SCALE_MAX = 1.8
 export const FONT_SCALE_STEP = 0.1
 
+export const UI_SCALE_MIN = 0.7
+export const UI_SCALE_MAX = 1.4
+export const UI_SCALE_STEP = 0.05
+
 /** Regular on phone portrait (clearer at small sizes); bold elsewhere. */
 export function defaultFontWeight(): FontWeight {
   if (typeof window === 'undefined') return 'bold'
   return window.matchMedia(PORTRAIT_MOBILE_MQ).matches ? 'regular' : 'bold'
+}
+
+/** TVs render a small CSS viewport but sit far away: shrink the chrome a bit. */
+export function defaultUiScale(): number {
+  return looksLikeTv() ? 0.8 : 1
 }
 
 const DEFAULTS: AppPrefs = {
@@ -41,6 +54,10 @@ const DEFAULTS: AppPrefs = {
   displayMode: 'mushaf',
   physicalNav: 'ayah',
   mushafWidth: 'auto',
+  pageFit: 'width',
+  railPanel: 'auto',
+  tvNav: 'auto',
+  uiScale: 1,
 }
 
 function normalizeDisplayMode(value: unknown): DisplayMode {
@@ -61,6 +78,27 @@ function normalizePhysicalNav(value: unknown): PhysicalNav {
 function normalizeMushafWidth(value: unknown): MushafWidth {
   if (value === 'full' || value === 'a4' || value === 'auto') return value
   return DEFAULTS.mushafWidth
+}
+
+function normalizePageFit(value: unknown): PageFit {
+  return value === 'screen' ? 'screen' : 'width'
+}
+
+function normalizeRailPanel(value: unknown): RailPanel {
+  if (value === 'on' || value === 'off') return value
+  return 'auto'
+}
+
+function normalizeTvNav(value: unknown): TvNav {
+  if (value === 'on' || value === 'off') return value
+  return 'auto'
+}
+
+function clampUiScale(value: unknown): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return defaultUiScale()
+  const stepped = Math.round(n / UI_SCALE_STEP) * UI_SCALE_STEP
+  return Math.min(UI_SCALE_MAX, Math.max(UI_SCALE_MIN, Number(stepped.toFixed(2))))
 }
 
 function normalizeFontWeight(value: unknown): FontWeight {
@@ -96,9 +134,13 @@ export function clampAyahRange(
 }
 
 export function loadPrefs(): AppPrefs {
+  const tv = looksLikeTv()
   const withWeightDefaults = (): AppPrefs => ({
     ...DEFAULTS,
     fontWeight: defaultFontWeight(),
+    uiScale: defaultUiScale(),
+    // A TV shows the whole Madani page at once; phones/tablets scroll by width.
+    pageFit: tv ? 'screen' : DEFAULTS.pageFit,
   })
 
   try {
@@ -134,6 +176,10 @@ export function loadPrefs(): AppPrefs {
       displayMode: normalizeDisplayMode(rest.displayMode ?? DEFAULTS.displayMode),
       physicalNav: normalizePhysicalNav(rest.physicalNav),
       mushafWidth: normalizeMushafWidth(rest.mushafWidth),
+      pageFit: normalizePageFit(rest.pageFit ?? (tv ? 'screen' : DEFAULTS.pageFit)),
+      railPanel: normalizeRailPanel(rest.railPanel),
+      tvNav: normalizeTvNav(rest.tvNav),
+      uiScale: clampUiScale(rest.uiScale ?? defaultUiScale()),
     }
   } catch {
     return withWeightDefaults()
