@@ -313,7 +313,12 @@ export function MushafPage({
 
     const applySize = (basePx: number, zoomFactor: number) => {
       const px = Math.max(8, basePx * zoomFactor)
-      root.style.fontSize = `${px}px`
+      const next = `${px}px`
+      // Only touch the DOM when the value really moves: writing the same size
+      // still invalidates style for the whole tree, and in whole-page fit the
+      // translation panel's height feeds back into the viewport height.
+      if (root.style.fontSize === next) return px
+      root.style.fontSize = next
       publishFittedSize(px)
       return px
     }
@@ -437,19 +442,32 @@ export function MushafPage({
     let lastWidth = -1
     let lastHeight = -1
     let lastTextWidth = -1
+    let raf = 0
+    /**
+     * Re-fit on the next frame instead of inside the observer callback. A fit
+     * that changes layout synchronously from ResizeObserver is what produces
+     * "ResizeObserver loop completed with undelivered notifications", and in
+     * whole-page fit the translation panel can echo the Arabic size back into
+     * the viewport height. Deferring one frame coalesces the burst into a
+     * single measurement pass.
+     */
     const ro = new ResizeObserver(() => {
-      const budget = fitBudget()
-      if (
-        budget.width === lastWidth &&
-        budget.height === lastHeight &&
-        budget.text === lastTextWidth
-      ) {
-        return
-      }
-      lastWidth = budget.width
-      lastHeight = budget.height
-      lastTextWidth = budget.text
-      fit()
+      if (raf) return
+      raf = window.requestAnimationFrame(() => {
+        raf = 0
+        const budget = fitBudget()
+        if (
+          budget.width === lastWidth &&
+          budget.height === lastHeight &&
+          budget.text === lastTextWidth
+        ) {
+          return
+        }
+        lastWidth = budget.width
+        lastHeight = budget.height
+        lastTextWidth = budget.text
+        fit()
+      })
     })
     ro.observe(root)
     if (viewport) ro.observe(viewport)
@@ -464,6 +482,7 @@ export function MushafPage({
 
     return () => {
       cancelled = true
+      if (raf) window.cancelAnimationFrame(raf)
       ro.disconnect()
       repaintRef.current = null
       applyScaleRef.current = () => {}
