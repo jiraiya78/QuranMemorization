@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { BISMILLAH } from '../data/bismillah'
 import {
   getLineDecorations,
@@ -30,6 +30,60 @@ const ZOOM_MAX = 2.4
 const FIT_BASE_RATIO = 0.86
 /** Horizontal swipe distance (px) that turns a page. */
 const SWIPE_THRESHOLD = 56
+/** Movement (px) before a touch is treated as a horizontal page drag. */
+const DRAG_SLOP = 10
+/** Page-transition durations. Keep in sync with the keyframes in index.css. */
+const SLIDE_MS = 300
+const TURN_MS = 340
+/** Easing for the pan of a page across its spread — shared by both sheets. */
+const PAN_EASE = 'cubic-bezier(0.3, 0.72, 0.25, 1)'
+const TURN_EASE = 'cubic-bezier(0.32, 0.6, 0.3, 1)'
+/** How far a turning leaf swings about its gutter, in degrees. */
+const LEAF_ANGLE = 76
+/** Angle the arriving page starts from when no leaf is available (buttons, remote). */
+const LEAF_LAND = 58
+
+/**
+ * The Madani Mushaf is read right to left, so the book is a strip whose first
+ * page sits on the far right and whose 604th page sits on the far left. Odd
+ * pages are the right-hand page of their spread and even pages the left-hand
+ * one, which makes the facing pairs:
+ *
+ *   spread 1 → [ 2 | 1 ]   spread 2 → [ 4 | 3 ]   …   spread 302 → [ 604 | 603 ]
+ */
+function pageIsRightSide(page: number): boolean {
+  return page % 2 === 1
+}
+
+/**
+ * Two pages face each other only when the lower number is odd (1↔2, 3↔4…), so
+ * that step is a pan across the open book (`slide`). Every other step crosses
+ * the spine into another spread and is a leaf turn (`turn`).
+ *
+ *   right page (odd)  + swipe left  → slide     + swipe right → turn
+ *   left page  (even) + swipe left  → turn      + swipe right → slide
+ */
+function turnModeFor(from: number, to: number): 'slide' | 'turn' {
+  return Math.min(from, to) % 2 === 1 ? 'slide' : 'turn'
+}
+
+/**
+ * Swipe direction, in page deltas. The pages run right to left, so dragging the
+ * strip leftward (`dx < 0`) uncovers the page sitting to the *right*, i.e. the
+ * previous page, and dragging rightward advances to the next one.
+ */
+function pageDeltaFor(dx: number): 1 | -1 {
+  return dx < 0 ? -1 : 1
+}
+
+/** Honour the OS "reduce motion" setting: pages then swap with no travel. */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
 
 interface Props {
   page: number
@@ -200,6 +254,7 @@ export function MushafPage({
   hideChrome = false,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const stageRef = useRef<HTMLDivElement | null>(null)
   const linesRootRef = useRef<HTMLDivElement | null>(null)
   const activeRef = useRef<HTMLElement | null>(null)
   const scrolledFocusKeyRef = useRef(0)
@@ -217,6 +272,21 @@ export function MushafPage({
   const pageRef = useRef(page)
   pageRef.current = page
   const lastPageRef = useRef<number | null>(null)
+  /** Set by the swipe handler so the next page render plays the matching entrance. */
+  const pendingTurnRef = useRef<{
+    dir: 1 | -1
+    mode: 'slide' | 'turn'
+    /** Where the incoming page starts, in px (negative = left of the viewport). */
+    enterFrom?: number
+  } | null>(null)
+  /**
+   * When the current page transition stops accepting input. A deadline, not a
+   * flag: if the clone that drives the animation is torn down early (a fast
+   * re-render, a hidden tab), paging must still recover on its own.
+   */
+  const animatingUntilRef = useRef(0)
+  const animating = () => performance.now() < animatingUntilRef.current
+  const animTimerRef = useRef(0)
   const paintedKeysRef = useRef('')
   const repaintRef = useRef<(() => void) | null>(null)
   const zoomRef = useRef(1)
@@ -574,62 +644,366 @@ export function MushafPage({
     setZoom(1)
   }, [page])
 
-  /** Slide/fade the sheet in whenever the page changes (buttons, numpad or swipe). */
-  useEffect(() => {
+  /**
+   * Play the entrance half of a page change. The outgoing half (if any) was
+   * already driven by the swipe handler; here the *new* page sweeps in from the
+   * correct side so the direction of travel is unmistakable.
+   *
+   * A layout effect, not a passive one: the class has to be on the sheet before
+   * the browser paints, otherwise the new page flashes at its final position.
+   */
+  useLayoutEffect(() => {
     const sheet = linesRootRef.current?.closest('.mushaf-sheet') as HTMLElement | null
     const previous = lastPageRef.current
     lastPageRef.current = page
     if (!sheet || previous == null || previous === page) return
-    sheet.style.setProperty('--turn-dir', page > previous ? '1' : '-1')
-    sheet.classList.remove('is-turning')
-    // Force a reflow so the same animation can replay on the next turn.
+
+    const dir: 1 | -1 = page > previous ? 1 : -1
+    const pending = pendingTurnRef.current
+    pendingTurnRef.current = null
+    const mode = pending?.mode ?? turnModeFor(previous, page)
+    const stage = stageRef.current
+
+    // A swipe leaves inline transition state behind; the entrance is CSS-driven.
+    sheet.style.transform = ''
+    sheet.style.opacity = ''
+    sheet.style.transition = ''
+    sheet.style.transformOrigin = ''
+    sheet.style.willChange = ''
+    sheet.classList.remove('is-dragging', 'is-drag-next', 'is-drag-prev')
+    sheet.classList.remove('is-slide-in', 'is-flip-in', 'is-leaf-land')
+    // Pages run right to left, so the strip follows the finger: advancing
+    // (dir +1) brings the new page in from the left, going back from the right.
+    sheet.style.setProperty('--turn-dir', String(dir))
+    // Shadow sweeps in from the gutter: the edge that faces the spine.
+    const onRightSide = pageIsRightSide(page)
+    sheet.style.setProperty('--shade-angle', onRightSide ? '90deg' : '270deg')
+    // Hinge on the gutter. Used when this page has to act as its own leaf.
+    sheet.style.setProperty('--turn-origin', onRightSide ? 'left center' : 'right center')
+    sheet.style.setProperty(
+      '--flip-from',
+      `${(onRightSide ? -1 : 1) * LEAF_LAND}deg`,
+    )
+    // A swipe hands over the exact distance still to travel, so this page starts
+    // butted up against the outgoing one instead of a full viewport away. A leaf
+    // turn reveals this page underneath, so it must not travel at all.
+    if (pending?.enterFrom != null) {
+      sheet.style.setProperty('--enter-from', `${pending.enterFrom}px`)
+    } else {
+      sheet.style.removeProperty('--enter-from')
+    }
+    const dur = mode === 'slide' ? SLIDE_MS : TURN_MS
+    if (prefersReducedMotion()) {
+      stage?.classList.remove('is-paging')
+      animatingUntilRef.current = 0
+      return
+    }
+    // Force a reflow so a repeated turn replays the animation from the start.
     void sheet.offsetWidth
-    sheet.classList.add('is-turning')
+
+    sheet.classList.add(mode === 'slide' ? 'is-slide-in' : 'is-flip-in')
+    /*
+     * A swipe turn is carried by the clone of the outgoing page, so this page is
+     * simply revealed. Buttons and the TV remote have no clone to work with (the
+     * old page is already unmounted), so the arriving page lands like a leaf
+     * itself. Without this a keyed turn showed nothing but a shadow fading.
+     */
+    if (mode === 'turn' && !pending) sheet.classList.add('is-leaf-land')
+    // Reveal the paper plate behind the moving leaf until it has settled.
+    stage?.classList.add('is-paging')
+    animatingUntilRef.current = performance.now() + dur + 40
+    window.clearTimeout(animTimerRef.current)
+    animTimerRef.current = window.setTimeout(
+      () => {
+        sheet.classList.remove('is-slide-in', 'is-flip-in', 'is-leaf-land')
+        stage?.classList.remove('is-paging')
+      },
+      dur + 20,
+    )
+
+    return () => window.clearTimeout(animTimerRef.current)
   }, [page])
 
-  /** Horizontal swipe (left = next page, right = previous) with a turn animation. */
+  /**
+   * Swipe paging with the page following the finger.
+   *
+   * A gesture only becomes a page drag once it is clearly horizontal, so normal
+   * vertical reading and pinch zoom stay untouched. The pages form a strip that
+   * runs right to left, so the sheet is dragged with the finger: swiping left
+   * pulls in the page sitting to the right (the earlier page), swiping right
+   * advances. On release the sheet keeps travelling (or springs back), the new
+   * page is mounted while the sheet is off-screen/low-opacity, and the entrance
+   * animation then sweeps it in from the far side. `turnModeFor` decides whether
+   * that reads as panning across the spread or flipping a leaf.
+   */
   useEffect(() => {
     const viewport = viewportRef.current
-    if (!viewport) return
+    const sheet = linesRootRef.current?.closest('.mushaf-sheet') as HTMLElement | null
+    const stage = stageRef.current
+    if (!viewport || !sheet) return
 
     let tracking = false
+    let dragging = false
     let startX = 0
     let startY = 0
     let dx = 0
     let dy = 0
+    let width = 0
+    let frame = 0
+    let paintedOffset = 0
+    let settleTimer = 0
+    let guardTimer = 0
+    let ghostTimer = 0
+    let reduce = false
+
+    const clearInline = () => {
+      sheet.style.transform = ''
+      sheet.style.opacity = ''
+      sheet.style.transition = ''
+      sheet.style.transformOrigin = ''
+      sheet.style.willChange = ''
+      sheet.classList.remove('is-dragging', 'is-drag-next', 'is-drag-prev')
+      stage?.classList.remove('is-paging')
+    }
+
+    /** Page that a drag in `dir` would land on (may be the current one at the ends). */
+    const targetFor = (dir: 1 | -1) => clampPage(pageRef.current + dir)
+
+    const paintDrag = () => {
+      frame = 0
+      const atEdge = targetFor(pageDeltaFor(dx)) === pageRef.current
+      // Rubber-band at the first/last page instead of a dead stop.
+      const damped = atEdge ? dx * 0.22 : dx
+      const limit = width * 0.94
+      const offset = Math.max(-limit, Math.min(limit, damped))
+      paintedOffset = offset
+      sheet.style.transform = `translate3d(${offset.toFixed(2)}px, 0, 0)`
+      // Dragging right uncovers the next page, dragging left the previous one.
+      sheet.classList.toggle('is-drag-next', offset > 0)
+      sheet.classList.toggle('is-drag-prev', offset < 0)
+    }
 
     const onStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1) {
+      if (e.touches.length !== 1 || animating()) {
         tracking = false
         return
       }
+      // Recover from any transition that was interrupted before its cleanup ran
+      // (a detach, a hidden tab). Cheap, and it keeps swiping self-healing.
+      const stale = ['is-slide-in', 'is-flip-in', 'is-leaf-land']
+      if (stale.some((cls) => sheet.classList.contains(cls))) {
+        clearInline()
+        sheet.classList.remove(...stale)
+      }
       tracking = true
+      dragging = false
       startX = e.touches[0]!.clientX
       startY = e.touches[0]!.clientY
       dx = 0
       dy = 0
+      paintedOffset = 0
+      width = viewport.clientWidth || sheet.clientWidth || 1
+      reduce = prefersReducedMotion()
     }
 
     const onMove = (e: TouchEvent) => {
       if (!tracking || e.touches.length !== 1) return
       dx = e.touches[0]!.clientX - startX
       dy = e.touches[0]!.clientY - startY
+      // Pinch-zoomed readers scroll sideways natively; never hijack the drag.
+      if (zoomRef.current > 1.01) return
+      if (!dragging) {
+        if (Math.abs(dx) < DRAG_SLOP) return
+        if (Math.abs(dx) < Math.abs(dy) * 1.2) {
+          // Mostly vertical: leave it to native scrolling.
+          tracking = false
+          return
+        }
+        dragging = true
+        if (!reduce) {
+          sheet.style.transition = 'none'
+          sheet.style.willChange = 'transform'
+          sheet.classList.add('is-dragging')
+          // Paper shows through the moment the page starts to lift.
+          stage?.classList.add('is-paging')
+        }
+      }
+      if (!frame && !reduce) frame = window.requestAnimationFrame(paintDrag)
+    }
+
+    const settleBack = () => {
+      sheet.style.transition = 'transform 240ms cubic-bezier(0.22, 0.7, 0.28, 1)'
+      sheet.style.transform = 'translate3d(0, 0, 0)'
+      window.clearTimeout(settleTimer)
+      settleTimer = window.setTimeout(clearInline, 250)
+    }
+
+    /**
+     * Freeze the page that is leaving into an absolutely positioned clone.
+     *
+     * The clone is measured *after* the drag has moved the sheet, so its rect
+     * already contains the finger offset; the copied inline transform must be
+     * cleared or that offset counts twice (and the clone drifts out of step with
+     * the page arriving next to it).
+     *
+     * A pan (`slide`) then travels the remaining distance with the finger, so the
+     * two sheets tile the viewport like one strip. A leaf turn rotates the clone
+     * about the gutter, sitting exactly over the page it is uncovering.
+     */
+    const spawnGhost = (
+      mode: 'slide' | 'turn',
+      offset: number,
+      delta: number,
+    ): HTMLElement | null => {
+      if (!stage) return null
+      const sheetRect = sheet.getBoundingClientRect()
+      const stageRect = stage.getBoundingClientRect()
+      const ghost = sheet.cloneNode(true) as HTMLElement
+      ghost.classList.remove(
+        'is-dragging',
+        'is-drag-next',
+        'is-drag-prev',
+        'is-slide-in',
+        'is-flip-in',
+      )
+      for (const el of ghost.querySelectorAll('[id]')) el.removeAttribute('id')
+      ghost.removeAttribute('id')
+      ghost.setAttribute('aria-hidden', 'true')
+      ghost.classList.add('mushaf-ghost')
+      // The rect already includes the drag offset. A panning sheet keeps it; a
+      // turning leaf translates it back out (below) so it sits over the new page.
+      ghost.style.top = `${sheetRect.top - stageRect.top}px`
+      ghost.style.left = `${sheetRect.left - stageRect.left}px`
+      ghost.style.width = `${sheetRect.width}px`
+      ghost.style.height = `${sheetRect.height}px`
+      ghost.style.transform = 'translate3d(0, 0, 0)'
+      // The leaf hinges on its spine edge, exactly like the page it replaces.
+      const hingeLeft = pageIsRightSide(pageRef.current)
+      ghost.style.transformOrigin = hingeLeft ? 'left center' : 'right center'
+      // It darkens from its free edge, the side that lifts off the page below.
+      ghost.style.setProperty('--shade-angle', hingeLeft ? '270deg' : '90deg')
+      ghost.style.willChange = 'transform, opacity'
+      if (mode === 'turn') ghost.classList.add('is-turn')
+      stage.appendChild(ghost)
+
+      const dur = mode === 'slide' ? SLIDE_MS : TURN_MS
+      ghost.style.transition =
+        mode === 'slide'
+          ? `transform ${dur}ms ${PAN_EASE}`
+          : `transform ${dur}ms ${TURN_EASE}`
+      // Flush the copied inline style so the run starts where the finger left off.
+      void ghost.offsetWidth
+      if (mode === 'slide') {
+        ghost.style.transform = `translate3d(${delta}px, 0, 0)`
+      } else {
+        // The free edge always folds away from the reader, whichever side the
+        // leaf is hinged on. That is the motion that reads correctly when a
+        // right-hand page turns (602→603); mirroring it by hinge side keeps the
+        // left-hand turn (603→602) from swinging towards the camera and
+        // ballooning off-screen.
+        //
+        // `dir` needs no say here: a turn only ever happens from an even page
+        // forwards or an odd page backwards, so parity already fixes it.
+        ghost.style.transform = `translate3d(${-offset}px, 0, 0) rotateY(${(hingeLeft ? -1 : 1) * LEAF_ANGLE}deg)`
+      }
+      return ghost
+    }
+
+    /**
+     * Commit a swipe: swap the page at once so the entrance starts in the same
+     * frame, while the ghost carries the old page away. Both halves run together,
+     * which is what makes the turn read as one movement.
+     */
+    const commitTurn = (dir: 1 | -1, mode: 'slide' | 'turn') => {
+      const target = targetFor(dir)
+      if (target === pageRef.current) {
+        settleBack()
+        return
+      }
+      const from = pageRef.current
+      const offset = paintedOffset
+      // Never let a stray copy of an older page linger under this one.
+      stage?.querySelectorAll('.mushaf-ghost').forEach((el) => el.remove())
+      // Panning continues for whatever is left of one viewport width; a leaf turn
+      // uncovers a page that is already in place.
+      const delta = dir * Math.max(0, width - Math.abs(offset))
+      pendingTurnRef.current = {
+        dir,
+        mode,
+        enterFrom: mode === 'slide' ? -delta : 0,
+      }
+      const ghost = spawnGhost(mode, offset, delta)
+      // Accept input again as soon as the pair has settled, whether or not the
+      // clone is still alive to report it.
+      animatingUntilRef.current =
+        performance.now() + (mode === 'slide' ? SLIDE_MS : TURN_MS) + 40
+      onPageChangeRef.current(target)
+
+      const dur = mode === 'slide' ? SLIDE_MS : TURN_MS
+      let settled = false
+      const settleGhost = () => {
+        if (settled) return
+        settled = true
+        ghost?.remove()
+      }
+      // Retire the copy when its own travel ends, not on a guessed timer: a
+      // throttled tab or a slow device would otherwise drop it mid-flight.
+      ghost?.addEventListener('transitionend', settleGhost, { once: true })
+      window.clearTimeout(ghostTimer)
+      ghostTimer = window.setTimeout(settleGhost, dur * 2 + 200)
+      // If the parent refused the move, never leave the page stranded.
+      window.clearTimeout(guardTimer)
+      guardTimer = window.setTimeout(() => {
+        if (pageRef.current === from) {
+          settleGhost()
+          clearInline()
+        }
+      }, dur + 120)
     }
 
     const finish = () => {
-      if (!tracking) return
+      const wasTracking = tracking
       tracking = false
-      // While pinch-zoomed the viewport scrolls sideways instead of turning pages.
-      if (zoomRef.current > 1.01) return
-      if (Math.abs(dx) < SWIPE_THRESHOLD) return
-      if (Math.abs(dx) < Math.abs(dy) * 1.6) return
-      const target = clampPage(pageRef.current + (dx < 0 ? 1 : -1))
-      if (target === pageRef.current) return
-      onPageChangeRef.current(target)
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+        frame = 0
+      }
+      if (!wasTracking) return
+      if (!dragging) {
+        // A tap that never became a drag.
+        clearInline()
+        return
+      }
+      dragging = false
+      if (zoomRef.current > 1.01) {
+        settleBack()
+        return
+      }
+      const dir: 1 | -1 = pageDeltaFor(dx)
+      const far = Math.abs(dx) >= SWIPE_THRESHOLD
+      const flick = Math.abs(dx) > Math.abs(dy) * 1.4 && Math.abs(dx) > SWIPE_THRESHOLD * 0.7
+      if (!(far || flick) || targetFor(dir) === pageRef.current) {
+        settleBack()
+        return
+      }
+      // Reduced motion: swap instantly, no travel, no paper reveal.
+      if (reduce) {
+        clearInline()
+        onPageChangeRef.current(targetFor(dir))
+        return
+      }
+      commitTurn(dir, turnModeFor(pageRef.current, targetFor(dir)))
     }
 
     const cancel = () => {
+      const wasDragging = dragging
       tracking = false
+      dragging = false
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+        frame = 0
+      }
+      if (wasDragging) settleBack()
     }
 
     viewport.addEventListener('touchstart', onStart, { passive: true })
@@ -641,6 +1015,12 @@ export function MushafPage({
       viewport.removeEventListener('touchmove', onMove)
       viewport.removeEventListener('touchend', finish)
       viewport.removeEventListener('touchcancel', cancel)
+      if (frame) window.cancelAnimationFrame(frame)
+      window.clearTimeout(settleTimer)
+      window.clearTimeout(guardTimer)
+      window.clearTimeout(ghostTimer)
+      stage?.querySelectorAll('.mushaf-ghost').forEach((el) => el.remove())
+      clearInline()
     }
   }, [])
 
@@ -769,7 +1149,8 @@ export function MushafPage({
         />
       ) : null}
 
-      <div className="mushaf-viewport" ref={viewportRef}>
+      <div className="mushaf-stage" ref={stageRef}>
+        <div className="mushaf-viewport" ref={viewportRef}>
         <div
           className={`mushaf-sheet${special ? ` is-${special}` : ''}${centerPage ? ' is-centered' : ''}`}
           dir="rtl"
@@ -832,6 +1213,7 @@ export function MushafPage({
               <span>{toArabicIndic(page)}</span>
             </footer>
           </div>
+        </div>
         </div>
       </div>
     </div>

@@ -21,12 +21,17 @@ export function MushafPageChrome({
 
   return (
     <div className={`mushaf-page-chrome${compact ? ' is-compact' : ''}`}>
+      {/*
+       * RTL: the mushaf runs right to left, so "further in" (a higher page
+       * number) lives to the left. The left arrow is therefore Next.
+       */}
       <button
         type="button"
         className="mushaf-page-nav"
-        disabled={page <= 1}
-        aria-label="Previous page"
-        onClick={() => onPageChange(clampPage(page - 1))}
+        disabled={page >= MUSHAF_PAGE_COUNT}
+        aria-label="Next page"
+        title="Next page"
+        onClick={() => onPageChange(clampPage(page + 1))}
       >
         ‹
       </button>
@@ -51,9 +56,10 @@ export function MushafPageChrome({
       <button
         type="button"
         className="mushaf-page-nav"
-        disabled={page >= MUSHAF_PAGE_COUNT}
-        aria-label="Next page"
-        onClick={() => onPageChange(clampPage(page + 1))}
+        disabled={page <= 1}
+        aria-label="Previous page"
+        title="Previous page"
+        onClick={() => onPageChange(clampPage(page - 1))}
       >
         ›
       </button>

@@ -668,6 +668,61 @@ html[data-font-weight='bold'] {
   gap: 0.55rem;
 }
 
+/*
+ * Stage wraps the scrolling viewport so a paper plate can sit underneath the
+ * sheet. While a page is dragged or turned the sheet uncovers it, which keeps
+ * the reader on paper instead of flashing the dark app background between two
+ * pages. `isolation` makes the plate's negative z-index land behind the page
+ * yet in front of the app shell.
+ */
+.mushaf-stage {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Clip the page as it sweeps out, and the ghost that carries it. */
+  overflow: hidden;
+  /* One vanishing point for the page and its clone, so a turn reads as paper. */
+  perspective: 1900px;
+  perspective-origin: 50% 46%;
+}
+
+.mushaf-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  margin-inline: auto;
+  width: 100%;
+  max-width: min(100%, 48rem);
+  border-radius: 6px;
+  background: var(--mushaf-page-bg);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent),
+    0 16px 34px -24px rgb(0 0 0 / 0.55);
+  opacity: 0;
+  transition: opacity 200ms linear;
+  pointer-events: none;
+}
+
+/* Appear instantly (a fade would show the shell through it), fade out after. */
+.mushaf-stage.is-paging::before {
+  opacity: 1;
+  transition-duration: 0ms;
+}
+
+html[data-mushaf-width='full'] .mushaf-stage::before {
+  max-width: none;
+}
+
+@media (max-width: 900px) and (orientation: portrait) {
+  html[data-mushaf-width='auto'] .mushaf-stage::before {
+    max-width: none;
+  }
+}
+
 .mushaf-page-chrome {
   display: flex;
   align-items: center;
@@ -1832,19 +1887,144 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
    Page turns, side rail, numpad jump, TV remote focus
    ========================================================================== */
 
-/* Slide/fade used for swipe and button page turns (direction set in JS). */
-.mushaf-sheet.is-turning {
-  animation: mushaf-page-turn 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+/*
+ * Spread-aware paging. A Madani spread holds an odd page on the right and the
+ * next even page on the left, so paging has two physically different motions:
+ *
+ *   slide  — pan across the open book (right page ↔ left page of one spread)
+ *   flip   — turn a leaf (crossing into another spread)
+ *
+ * Both animate transform + opacity only, so the compositor owns the frames and
+ * the Arabic text never reflows mid-flight.
+ */
+.mushaf-viewport {
+  /* The moving sheet must not create a horizontal scrollbar or bounce. */
+  overflow-x: clip;
 }
 
-@keyframes mushaf-page-turn {
+.mushaf-sheet.is-dragging {
+  cursor: grabbing;
+  /* Static lift shadow: rasterised once, then carried by the compositor. */
+  border-radius: 8px;
+  box-shadow: 0 16px 38px -14px rgb(0 0 0 / 0.4);
+}
+
+/*
+ * Snapshot of the outgoing page, pinned over its exact box so it can keep moving
+ * while the new page arrives. Purely visual: no pointer, no accessibility tree.
+ */
+.mushaf-ghost {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  pointer-events: none;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+/* While a leaf peels away it darkens, as the light leaves the paper. */
+.mushaf-ghost.is-turn .mushaf-sheet-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    var(--shade-angle, 270deg),
+    rgb(0 0 0 / 0.34),
+    rgb(0 0 0 / 0.08) 46%,
+    transparent 72%
+  );
+  animation: mushaf-leaf-shade 340ms ease-in both;
+}
+
+@keyframes mushaf-leaf-shade {
   from {
-    opacity: 0.35;
-    transform: translateX(calc(var(--turn-dir, 1) * -7%));
+    opacity: 0;
   }
   to {
     opacity: 1;
-    transform: none;
+  }
+}
+
+.mushaf-sheet.is-slide-in {
+  animation: mushaf-slide-in 300ms cubic-bezier(0.3, 0.72, 0.25, 1) both;
+  will-change: transform;
+}
+
+.mushaf-sheet.is-flip-in {
+  /* Only the shadow moves: a turned leaf uncovers a page that is already there. */
+  animation: none;
+}
+
+/*
+ * Turning a leaf. The outgoing copy rotates about the gutter (`mushaf-ghost
+ * .is-turn`); here the page underneath simply comes out of its shadow, which is
+ * what sells the reveal without sliding the text around.
+ */
+.mushaf-sheet.is-flip-in .mushaf-sheet-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    var(--shade-angle, 90deg),
+    rgb(0 0 0 / 0.3),
+    rgb(0 0 0 / 0.06) 42%,
+    transparent 68%
+  );
+  animation: mushaf-flip-shade 340ms cubic-bezier(0.32, 0.6, 0.3, 1) both;
+}
+
+@keyframes mushaf-flip-shade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/*
+ * Keyed turns (buttons, TV remote). No outgoing clone exists here, so the
+ * arriving page plays the leaf itself: it swings up out of the gutter and
+ * settles flat. `--flip-from` carries the sign, so the free edge always folds
+ * away from the reader — the same motion the clone makes on a swipe.
+ */
+.mushaf-sheet.is-leaf-land {
+  animation: mushaf-leaf-land 340ms cubic-bezier(0.32, 0.6, 0.3, 1) both;
+  transform-origin: var(--turn-origin, left center);
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+@keyframes mushaf-leaf-land {
+  from {
+    transform: perspective(1700px) rotateY(var(--flip-from, 0deg));
+  }
+  to {
+    transform: perspective(1700px) rotateY(0deg);
+  }
+}
+
+/*
+ * Panning across a spread. `--turn-dir` is the page delta: +1 advances further
+ * into the mushaf (towards page 604, which sits on the left), -1 goes back. The
+ * sheet is dragged with the finger, so the incoming page always arrives from the
+ * opposite side of the travel: from the left when advancing, from the right when
+ * paging back — i.e. from the side that page physically occupies.
+ *
+ * `--enter-from` is the distance a swipe still had to cover, so this page starts
+ * butted against the outgoing one and the pair moves as a single strip. No fade:
+ * the two sheets tile the viewport for the whole move.
+ */
+@keyframes mushaf-slide-in {
+  from {
+    transform: translate3d(var(--enter-from, calc(var(--turn-dir, 1) * -100%)), 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -2200,8 +2380,20 @@ html[data-mushaf-width='full'] .mushaf-page-chrome:not(.is-compact) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mushaf-sheet.is-turning {
+  .mushaf-sheet.is-slide-in,
+  .mushaf-sheet.is-flip-in,
+  .mushaf-sheet.is-leaf-land,
+  .mushaf-sheet.is-flip-in .mushaf-sheet-frame::after,
+  .mushaf-ghost.is-turn .mushaf-sheet-frame::after {
     animation: none;
+  }
+
+  .mushaf-ghost {
+    display: none;
+  }
+
+  .mushaf-sheet.is-dragging {
+    box-shadow: none;
   }
 }
 
