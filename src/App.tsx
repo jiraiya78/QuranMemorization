@@ -97,6 +97,13 @@ export default function App() {
   prevSurahIdRef.current = prevSurahId
   nextSurahIdRef.current = nextSurahId
   const playerStopRef = useRef<() => void>(() => {})
+  const playerPlayRef = useRef<() => void>(() => {})
+  const isPlayingRef = useRef(false)
+  /**
+   * After a surah jump while audio was running, start the new surah once prefs
+   * have settled. Calling stop() first is what killed car Media Session handlers.
+   */
+  const pendingSurahPlayRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!toast) return
@@ -168,21 +175,34 @@ export default function App() {
     return () => document.removeEventListener('fullscreenchange', onFsChange)
   }, [])
 
+  /**
+   * Jump to another surah without tearing down Media Session.
+   *
+   * Car / Bluetooth hosts drop play/pause/next handlers the moment audio.src is
+   * cleared (what `stop()` does). So while audio is running we only retarget the
+   * prefs and queue; once React has applied the new surah we call play(). When
+   * idle we still stop so a leftover loaded ayah does not resume after browsing.
+   */
+  const jumpSurah = useCallback((id: number) => {
+    if (isPlayingRef.current) {
+      pendingSurahPlayRef.current = id
+    } else {
+      pendingSurahPlayRef.current = null
+      playerStopRef.current()
+    }
+    setSelectedAyah(null)
+    goToSurah(id)
+  }, [goToSurah])
+
   const handleSurahPrev = useCallback(() => {
     const id = prevSurahIdRef.current
-    if (id != null) {
-      playerStopRef.current()
-      goToSurahRef.current(id)
-    }
-  }, [])
+    if (id != null) jumpSurah(id)
+  }, [jumpSurah])
 
   const handleSurahNext = useCallback(() => {
     const id = nextSurahIdRef.current
-    if (id != null) {
-      playerStopRef.current()
-      goToSurahRef.current(id)
-    }
-  }, [])
+    if (id != null) jumpSurah(id)
+  }, [jumpSurah])
 
   const playPageRef = useRef<(surahId: number, ayah: number) => void>(() => {})
 
@@ -206,6 +226,15 @@ export default function App() {
   })
 
   playerStopRef.current = player.stop
+  playerPlayRef.current = player.play
+  isPlayingRef.current = player.isPlaying
+
+  // Finish a keep-playing surah jump once the new playlist scope is in place.
+  useEffect(() => {
+    if (pendingSurahPlayRef.current !== prefs.surahId) return
+    pendingSurahPlayRef.current = null
+    playerPlayRef.current()
+  }, [prefs.surahId, prefs.rangeFrom, prefs.rangeTo, prefs.pageNumber])
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
@@ -267,9 +296,7 @@ export default function App() {
   }
 
   const changeSurah = (id: number) => {
-    player.stop()
-    setSelectedAyah(null)
-    goToSurah(id)
+    jumpSurah(id)
   }
 
   const handleDownload = async () => {

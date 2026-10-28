@@ -330,6 +330,11 @@ export function SettingsModal({
                 Surah
               </button>
             </div>
+            <p className="field-hint">
+              Steering wheel / headset / Bluetooth next and previous. Surah mode
+              jumps to the next or previous chapter and keeps playing if audio
+              was already running.
+            </p>
           </div>
 
           <div className="field">

@@ -103,6 +103,8 @@ export function usePlayer({
   const onPlayPageRef = useRef(onPlayPage)
   /** Page on screen — Play starts recitation here, not wherever it last stopped. */
   const pageNumberRef = useRef(pageNumber)
+  /** Filled by the Media Session effect; called after every successful play(). */
+  const bindMediaSessionRef = useRef<() => void>(() => {})
   physicalNavRef.current = physicalNav
   onSurahPrevRef.current = onSurahPrev
   onSurahNextRef.current = onSurahNext
@@ -240,6 +242,8 @@ export function usePlayer({
           await audio.play()
           playingRef.current = true
           setIsPlaying(true)
+          // Keep car / Bluetooth hosts subscribed after every source swap.
+          bindMediaSessionRef.current()
         } else {
           audio.pause()
           playingRef.current = false
@@ -458,13 +462,13 @@ export function usePlayer({
     syncMeta(Math.max(0, browsedIndex))
   }, [firstIndexOnPage, pause, rebuildPlaylist, syncMeta])
 
-  // Physical buttons: car steering wheel / headset / TV remote.
+  // Physical buttons: car steering wheel / headset / TV remote / Bluetooth.
   //
-  // Registered ONCE. Re-registering Media Session handlers on every play/pause
-  // (they used to depend on `toggle`/`next` identities) is what made steering
-  // wheel and Bluetooth buttons stop responding after the surah/ayah switch was
-  // added — some car browsers drop the handler when it is replaced mid-track.
-  // Everything is read through refs so the listeners never churn.
+  // Handlers are stable closures over refs so they never go stale. Media Session
+  // is bound once, then *re-asserted* (without nulling) whenever audio actually
+  // starts — some car browsers silently drop handlers after pause/stop, and
+  // wiring `play` to a toggle used to pause when the host's play/pause state
+  // disagreed with ours.
   const controlsRef = useRef({ next, prev, toggle, play, resume, pause, stop })
   controlsRef.current = { next, prev, toggle, play, resume, pause, stop }
   const remoteNavRef = useRef(remoteNav)
@@ -476,20 +480,26 @@ export function usePlayer({
 
   useEffect(() => {
     const physicalNext = () => {
-      const controls = controlsRef.current
       if (physicalNavRef.current === 'surah') onSurahNextRef.current?.()
-      else controls.next()
+      else controlsRef.current.next()
     }
     const physicalPrev = () => {
-      const controls = controlsRef.current
       if (physicalNavRef.current === 'surah') onSurahPrevRef.current?.()
-      else controls.prev()
+      else controlsRef.current.prev()
+    }
+    /** Explicit play — never toggle. Hosts send `play` when they think we are paused. */
+    const physicalPlay = () => {
+      const controls = controlsRef.current
+      if (playingRef.current) return
+      if (audioRef.current?.src) controls.resume()
+      else controls.play()
+    }
+    const physicalPause = () => {
+      controlsRef.current.pause()
     }
     const physicalToggle = () => {
-      const controls = controlsRef.current
-      if (playingRef.current) controls.pause()
-      else if (audioRef.current?.src) controls.resume()
-      else controls.play()
+      if (playingRef.current) physicalPause()
+      else physicalPlay()
     }
 
     const isTypingTarget = (target: HTMLElement | null) =>
@@ -501,30 +511,58 @@ export function usePlayer({
             target.isContentEditable),
       )
 
+    const matches = (code: string, key: string, names: string[]) =>
+      names.includes(code) || names.includes(key)
+
     const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null
+      // Car / Bluetooth hosts often deliver media keys with `target` set to the
+      // window or document — those have no `.closest`, and throwing here used to
+      // abort the whole handler (play/pause and next/prev looked "dead").
+      const target = e.target instanceof HTMLElement ? e.target : null
       if (isTypingTarget(target)) return
 
       const code = e.code || ''
       const key = e.key || ''
       // Space/Enter on a focused control should activate it, not double-fire here.
       const onButton =
-        target?.closest('button, [role="button"], a[href]') != null &&
+        target != null &&
+        target.closest('button, [role="button"], a[href]') != null &&
         (code === 'Space' || key === ' ' || code === 'Enter' || key === 'Enter')
 
-      if (code === 'Space' || key === ' ' || code === 'MediaPlayPause' || key === 'MediaPlayPause') {
+      // Media keys always win — cars send these even when a button is focused.
+      if (
+        matches(code, key, ['MediaPlayPause', 'MediaPlay', 'MediaPause']) ||
+        code === 'Space' ||
+        key === ' '
+      ) {
         if (onButton) return
         e.preventDefault()
-        physicalToggle()
+        if (matches(code, key, ['MediaPlay'])) physicalPlay()
+        else if (matches(code, key, ['MediaPause'])) physicalPause()
+        else physicalToggle()
         return
       }
 
-      if (code === 'MediaTrackNext' || key === 'MediaTrackNext') {
+      if (
+        matches(code, key, [
+          'MediaTrackNext',
+          'MediaFastForward',
+          'MediaTrackNextTrack',
+          'AudioForward',
+        ])
+      ) {
         e.preventDefault()
         physicalNext()
         return
       }
-      if (code === 'MediaTrackPrevious' || key === 'MediaTrackPrevious') {
+      if (
+        matches(code, key, [
+          'MediaTrackPrevious',
+          'MediaRewind',
+          'MediaTrackPreviousTrack',
+          'AudioRewind',
+        ])
+      ) {
         e.preventDefault()
         physicalPrev()
         return
@@ -534,19 +572,19 @@ export function usePlayer({
       const inDialog = target?.closest('[role="dialog"]') != null
       if (inDialog) return
 
-      if (code === 'PageDown' || key === 'PageDown' || code === 'ChannelDown' || key === 'ChannelDown') {
+      if (matches(code, key, ['PageDown', 'ChannelDown'])) {
         e.preventDefault()
         onPageNextRef.current?.()
         return
       }
-      if (code === 'PageUp' || key === 'PageUp' || code === 'ChannelUp' || key === 'ChannelUp') {
+      if (matches(code, key, ['PageUp', 'ChannelUp'])) {
         e.preventDefault()
         onPagePrevRef.current?.()
         return
       }
 
       // Arrow keys drive D-pad focus navigation on TV; on car head units they
-      // step ayat. Leave them alone when spatial navigation owns the arrows.
+      // step ayah/surah. Leave them alone when spatial navigation owns the arrows.
       if (remoteNavRef.current) return
       if (code === 'ArrowRight' || code === 'ArrowDown') {
         e.preventDefault()
@@ -562,30 +600,46 @@ export function usePlayer({
     window.addEventListener('keydown', onKeyDown)
 
     const ms = typeof navigator !== 'undefined' ? navigator.mediaSession : null
-    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = ms
-      ? [
-          ['play', () => physicalToggle()],
-          ['pause', () => controlsRef.current.pause()],
-          ['stop', () => controlsRef.current.stop()],
-          ['previoustrack', () => physicalPrev()],
-          ['nexttrack', () => physicalNext()],
-        ]
-      : []
+    const actionHandlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ['play', () => physicalPlay()],
+      ['pause', () => physicalPause()],
+      ['stop', () => controlsRef.current.stop()],
+      ['previoustrack', () => physicalPrev()],
+      ['nexttrack', () => physicalNext()],
+    ]
+    // A few head units map seek buttons onto next/prev instead of scrubbing.
+    const optionalHandlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ['seekforward', () => physicalNext()],
+      ['seekbackward', () => physicalPrev()],
+    ]
 
-    if (ms) {
-      for (const [action, handler] of handlers) {
+    const bindMediaSession = () => {
+      if (!ms) return
+      for (const [action, handler] of [...actionHandlers, ...optionalHandlers]) {
         try {
           ms.setActionHandler(action, handler)
         } catch {
-          // Some browsers reject unsupported actions — keep the rest registered.
+          // Unsupported action on this host — keep the rest.
         }
       }
     }
+    bindMediaSessionRef.current = bindMediaSession
+    bindMediaSession()
+
+    // Re-assert after the element actually starts; some cars only keep the
+    // binding while a real playback session is live. Create the element now so
+    // the listener is in place before the first user Play press.
+    if (!audioRef.current) audioRef.current = new Audio()
+    const audio = audioRef.current
+    const onAudioPlay = () => bindMediaSession()
+    audio.addEventListener('play', onAudioPlay)
 
     return () => {
       window.removeEventListener('keydown', onKeyDown)
+      audio.removeEventListener('play', onAudioPlay)
+      bindMediaSessionRef.current = () => {}
       if (ms) {
-        for (const [action] of handlers) {
+        for (const [action] of [...actionHandlers, ...optionalHandlers]) {
           try {
             ms.setActionHandler(action, null)
           } catch {
@@ -594,12 +648,14 @@ export function usePlayer({
         }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Also re-bind when our playing flag flips on — covers resume paths that do
+  // not fire a fresh HTMLMediaElement `play` event on every host.
   useEffect(() => {
     if (!navigator.mediaSession) return
     navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused'
+    if (isPlaying) bindMediaSessionRef.current()
   }, [isPlaying])
 
   return {
